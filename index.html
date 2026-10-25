@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Budget — dashboard local</title>
+<title>Budget</title>
 <style>
 :root{--bg:#f6f5f1;--card:#fff;--ink:#1f1f1d;--muted:#6b6a64;--line:#dcdad2;--ok:#1d7a4d;--warn:#a46a0b;--bad:#b4342c;--acc:#2b5db3;--accbg:#e6eefb}
 *{box-sizing:border-box}
@@ -87,140 +87,73 @@ input,select,textarea{max-width:100%}
 </head>
 <body>
 <header>
-  <h1>Budget — dashboard local</h1>
-  <span id="badge-machine" class="badge">machine ?</span>
-  <span id="badge-dossier" class="badge bad">dossier non ouvert</span>
-  <span id="badge-sync" class="badge gris hidden">GitHub : non connecté</span>
-  <span id="badge-dirty" class="badge warn hidden">modifications non enregistrées</span>
+  <h1>Budget</h1>
+  <span id="badge-sync" class="badge gris">non connecté</span>
   <span class="muted small" style="margin-left:auto" id="version"></span>
 </header>
 <nav id="nav">
-  <button data-screen="import" class="on">Import &amp; état</button>
-  <button data-screen="validation">Validation<span class="n hidden" id="nav-n"></span></button>
-  <button data-screen="mensuel">Mensuel</button>
-  <button data-screen="bord">Tableau de bord</button>
-  <button data-screen="regles">Règles</button>
+  <button data-screen="import" class="on">Import</button>
+  <button data-screen="validation">Valider<span class="n hidden" id="nav-n"></span></button>
+  <button data-screen="mensuel">Mois</button>
+  <button data-screen="bord">Bilan</button>
+  <button data-screen="avance">Avancé</button>
 </nav>
 <main>
 
-<div id="conflit" class="block hidden">
-  <h2>Conflit Git détecté dans <span id="conflit-fichier"></span></h2>
-  <p>Le fichier contient des marqueurs <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> / <code>=======</code> / <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> : les deux postes l'ont modifié sans se synchroniser. Le dashboard ne le charge pas tel quel pour ne rien écraser.</p>
-  <div id="conflit-fusion" class="hidden">
-    <p><b>Fusionner les deux versions ici</b> — rien n'est perdu : toutes les opérations, règles, poches et saisies des deux postes sont gardées. Quand une même ligne existe des deux côtés, la plus avancée gagne (validée &gt; automatique &gt; à valider) et, à égalité, celle de ce poste ; une même règle modifiée des deux côtés garde la modification la plus récente. Les saisies du mois et les paramètres se complètent champ par champ. Le résultat est écrit sur disque, puis la page est rechargée.</p>
-    <div id="conflit-apercu" class="small muted" style="margin:0 0 8px"></div>
-    <div class="row"><button class="b primary" id="conflit-fusionner">Fusionner et enregistrer</button></div>
-    <p class="small muted" style="margin:8px 0 0">Ensuite, dans la fenêtre de commande : <code>git add -A</code> puis <code>git commit -m "fusion"</code> et <code>git push</code>.</p>
-  </div>
-  <div id="conflit-manuel">
-    <p id="conflit-manuel-msg" class="small muted"></p>
-    <ol>
-      <li>Dans le dossier du dépôt, ouvrir le fichier dans un éditeur de texte et garder une seule des deux versions (supprimer les marqueurs et l'autre bloc), <b>ou</b> choisir une version entière : <code>git checkout --ours &lt;fichier&gt;</code> (la tienne) ou <code>git checkout --theirs &lt;fichier&gt;</code> (celle de l'autre poste).</li>
-      <li>Enregistrer, puis recharger cette page.</li>
-      <li>Réimporter le CSV du mois : la déduplication ne réinsère que ce qui manque.</li>
-    </ol>
-  </div>
-  <button class="b" onclick="location.reload()">Recharger la page</button>
-</div>
-
-<div id="stale" class="block hidden" style="background:#fbefd9;border-color:#f0d49a">
-  <h2 style="color:var(--warn)">Le fichier sur disque est plus récent que ce qui est affiché</h2>
-  <p id="stale-msg"></p>
-  <div class="row">
-    <button class="b primary" id="stale-reload">Recharger depuis le disque (perdre les modifications en cours)</button>
-    <button class="b" id="stale-ignore">Garder l'affichage actuel</button>
-  </div>
-</div>
-
-<section class="screen on" id="screen-import">
-  <div class="card">
-    <h2>Dossier du dépôt</h2>
-    <p class="small muted" id="fsapi-msg">Choisis le dossier qui contient <code>index.html</code>, <code>rules.json</code> et <code>data.json</code>. Les fichiers manquants sont créés.</p>
-    <div class="row">
-      <button class="b primary" id="btn-ouvrir">Choisir le dossier</button>
-      <button class="b hidden" id="btn-reautoriser">Réautoriser l'accès</button>
-      <button class="b" id="btn-verifier" disabled>Vérifier le disque</button>
-      <button class="b" id="btn-enregistrer" disabled>Enregistrer</button>
-      <span class="muted small">Secours :</span>
-      <button class="b" id="btn-export">Exporter les JSON</button>
-      <label class="b" style="cursor:pointer">Importer les JSON<input type="file" id="in-json" accept=".json" multiple class="hidden"></label>
-      <label class="b" style="cursor:pointer" title="Ajoute à ce qui est affiché ici les opérations, saisies, règles et poches d'un data.json ou rules.json venu d'un autre poste, sans rien perdre">Fusionner les JSON d'un autre poste<input type="file" id="in-fusion" accept=".json" multiple class="hidden"></label>
-    </div>
-    <div class="kv" style="margin-top:12px" id="etat-fichiers"></div>
-  </div>
-
-  <div class="card" id="card-github">
-    <h2>Synchronisation GitHub (chiffrée) — PC, Mac et téléphone</h2>
-    <p class="small muted">Les données sont chiffrées dans ce navigateur (phrase de passe) puis stockées dans un seul fichier du dépôt privé, <code>data/store.json.enc</code>. GitHub ne voit jamais le contenu en clair. Il faut un <b>token fine-grained</b> limité à ce dépôt (Contents : lecture et écriture) et une <b>phrase de passe</b> de 4-5 mots, la même sur tous les appareils. <b>Phrase perdue = données irrécupérables</b> : note-la dans ton gestionnaire de mots de passe.</p>
+<!-- Première ouverture / appareil non connecté : seul écran visible -->
+<section id="ecran-connexion" class="hidden">
+  <div class="card" style="max-width:520px;margin:20px auto">
+    <h2>Connexion</h2>
     <div id="gh-ouvrir" class="hidden">
-      <p class="small" id="gh-ouvrir-msg" style="margin:0 0 8px">Cet appareil se souvient de la clé : saisis ton code.</p>
+      <p class="small" id="gh-ouvrir-msg" style="margin:0 0 8px">Saisis ton code.</p>
       <div class="row" style="align-items:flex-end">
         <label class="small">Code<br><input id="gh-ouvrir-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" style="width:120px"></label>
         <button class="b primary" id="gh-ouvrir-btn">Ouvrir</button>
-        <button class="b" id="gh-ouvrir-phrase">Utiliser la phrase à la place</button>
+        <button class="b" id="gh-ouvrir-phrase">Phrase à la place</button>
       </div>
     </div>
     <div id="gh-form">
       <p class="small" id="gh-msg" style="color:var(--bad);margin:0 0 8px"></p>
       <div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
-        <label class="small">Dépôt<br><input id="gh-depot" placeholder="proprietaire/depot" style="width:220px" autocapitalize="none" autocorrect="off"></label>
+        <label class="small">Dépôt privé<br><input id="gh-depot" placeholder="proprietaire/depot" style="width:220px" autocapitalize="none" autocorrect="off"></label>
         <label class="small">Branche<br><input id="gh-branche" value="main" style="width:90px" autocapitalize="none"></label>
-        <label class="small">Token GitHub<br><input id="gh-token" type="password" placeholder="github_pat_…" style="width:260px" autocomplete="off"></label>
-        <label class="small">Phrase de passe<br><input id="gh-phrase" type="password" placeholder="quatre ou cinq mots" style="width:260px" autocomplete="off"> <span id="gh-force" class="badge gris">force ?</span></label>
-        <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:6px"><input type="checkbox" id="gh-souvenir" checked> se souvenir sur cet appareil, protégé par un code</label>
+        <label class="small" title="Fine-grained token limité à ce dépôt, Contents : lecture et écriture">Token GitHub<br><input id="gh-token" type="password" placeholder="github_pat_…" style="width:260px" autocomplete="off"></label>
+        <label class="small" title="La même sur tous les appareils. Perdue = données irrécupérables : note-la dans un gestionnaire de mots de passe.">Phrase de passe<br><input id="gh-phrase" type="password" placeholder="quatre ou cinq mots" style="width:260px" autocomplete="off"> <span id="gh-force" class="badge gris">force ?</span></label>
+        <label class="small" title="Nom affiché dans l'historique des sauvegardes">Nom de cet appareil<br><input id="gh-machine" placeholder="PC, MAC, IPHONE" style="width:160px" autocapitalize="characters"></label>
+        <label class="small" style="display:flex;align-items:center;gap:6px;padding-bottom:6px" title="La clé reste dans ce navigateur, chiffrée par le code ; 5 codes faux l'effacent"><input type="checkbox" id="gh-souvenir" checked> se souvenir ici, avec un code</label>
         <label class="small" id="gh-code-label">Code (4 à 8 chiffres)<br><input id="gh-code" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="6 chiffres" style="width:120px"></label>
       </div>
-      <div class="row" style="margin-top:8px">
-        <button class="b primary" id="gh-connecter">Connecter</button>
-        <button class="b" id="gh-migrer" disabled title="Copie les rules.json et data.json affichés (ouverts depuis le dossier) dans le fichier chiffré sur GitHub, puis bascule la page en mode GitHub">Migrer le dossier vers GitHub</button>
-      </div>
-    </div>
-    <div id="gh-connecte" class="hidden">
-      <p class="small" id="sync-etat" style="margin:0 0 8px"></p>
-      <div class="row">
-        <button class="b" id="gh-phrase-changer">Changer la phrase de passe</button>
-        <button class="b" id="gh-deconnecter">Déconnecter cet appareil</button>
-      </div>
-      <p class="small muted" style="margin:8px 0 0">Une fois migré, <code>data.json</code> et <code>rules.json</code> en clair n'ont plus de raison d'être dans le dépôt : sur le PC, <code>git rm --cached data.json rules.json</code>, ajoute-les au <code>.gitignore</code>, commit, push.</p>
+      <div class="row" style="margin-top:8px"><button class="b primary" id="gh-connecter">Connecter</button></div>
     </div>
   </div>
+</section>
 
+<section class="screen on" id="screen-import">
   <div class="card">
-    <h2>Importer les exports Boursorama</h2>
-    <div class="drop" id="drop">Glisser ici les CSV perso et pro (un ou deux fichiers)<br><span class="small">ou <label style="text-decoration:underline;cursor:pointer">cliquer pour choisir<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label></span><br><span class="small">Les CSV ne sont jamais copiés dans le dépôt.</span></div>
+    <div class="drop" id="drop">Glisser ici les CSV Boursorama (perso et/ou pro)<br><span class="small">ou <label style="text-decoration:underline;cursor:pointer">choisir<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label></span></div>
     <div id="import-resultat" style="margin-top:12px"></div>
+    <div class="kv" style="margin-top:8px" id="etat-fichiers"></div>
   </div>
-
   <div class="card">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">Opérations <span class="muted" id="ops-count"></span></h2>
+      <h2 style="margin:0" title="Clique sur une ligne pour la corriger">Opérations <span class="muted" id="ops-count"></span></h2>
       <div class="row">
         <select id="f-compte"><option value="">perso + pro</option><option value="perso">perso</option><option value="pro">pro</option></select>
         <select id="f-statut"><option value="">tous statuts</option><option value="a_valider">à valider</option><option value="auto">auto</option><option value="valide">validé</option></select>
-        <input type="text" id="f-texte" placeholder="filtrer libellé ou catégorie">
+        <input type="text" id="f-texte" placeholder="filtrer">
       </div>
     </div>
-    <p class="small muted" style="margin:6px 0 0">Clique sur une ligne pour la corriger.</p>
     <div style="overflow:auto;margin-top:6px"><table id="ops"><thead><tr><th>Date</th><th>Compte</th><th>Libellé</th><th>Catégorie</th><th>Entité</th><th>Statut</th><th style="text-align:right">Montant</th></tr></thead><tbody></tbody></table></div>
     <p class="muted small" id="ops-more"></p>
-  </div>
-
-  <div class="card">
-    <h2>Tests intégrés</h2>
-    <p class="small muted">Parseur, clé marchand, déduplication, écriture déterministe, moteur de catégorisation et appariements, sur des exemples internes, sans toucher aux fichiers.</p>
-    <button class="b" id="btn-tests">Lancer les tests</button>
-    <div id="tests" style="margin-top:10px"></div>
   </div>
 </section>
 
 <section class="screen" id="screen-validation">
-  <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Légende des codes (survole un code n'importe où pour voir sa définition)</summary><div id="legende-1" class="small" style="margin-top:8px"></div></details>
   <div class="card">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">File de validation</h2>
+      <h2 style="margin:0" title="Chaque correction crée une règle pour les prochaines lignes du même marchand">À valider</h2>
       <span class="small muted" id="val-resume"></span>
     </div>
-    <p class="small muted" style="margin:6px 0 0">Chaque correction crée une règle : la prochaine ligne du même marchand sera catégorisée toute seule. « Valider » accepte la proposition affichée.</p>
     <div id="val-liste" style="margin-top:10px"></div>
   </div>
 </section>
@@ -228,27 +161,25 @@ input,select,textarea{max-width:100%}
 <section class="screen" id="screen-mensuel">
   <div class="card">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">Saisies du mois</h2>
+      <h2 style="margin:0" title="Les totaux Doctolib ventilent les honoraires Nice / EHPAD ; les soldes servent au contrôle des poches">Saisies du mois</h2>
       <label class="small muted">Mois <select id="m-mois"></select></label>
     </div>
     <div class="row" style="margin-top:10px">
-      <label class="small muted">Facturé Nice (Doctolib) <input type="number" step="0.01" id="m-nice" style="width:120px"></label>
-      <label class="small muted">Facturé EHPAD (Doctolib) <input type="number" step="0.01" id="m-ehpad" style="width:120px"></label>
-      <label class="small muted">Espèces encaissées (pro) <input type="number" step="0.01" id="m-especes" style="width:120px"></label>
+      <label class="small muted">Facturé Nice <input type="number" step="0.01" id="m-nice" style="width:120px"></label>
+      <label class="small muted">Facturé EHPAD <input type="number" step="0.01" id="m-ehpad" style="width:120px"></label>
+      <label class="small muted">Espèces (pro) <input type="number" step="0.01" id="m-especes" style="width:120px"></label>
     </div>
     <div class="row" style="margin-top:8px">
-      <label class="small muted">Solde Livret A <input type="number" step="0.01" id="m-la" style="width:120px"></label>
-      <label class="small muted">Solde LEP <input type="number" step="0.01" id="m-lep" style="width:120px"></label>
-      <label class="small muted">Solde LDDS <input type="number" step="0.01" id="m-ldds" style="width:120px"></label>
-      <button class="b primary" id="m-ok">Enregistrer le mois</button>
+      <label class="small muted">Livret A <input type="number" step="0.01" id="m-la" style="width:120px"></label>
+      <label class="small muted">LEP <input type="number" step="0.01" id="m-lep" style="width:120px"></label>
+      <label class="small muted">LDDS <input type="number" step="0.01" id="m-ldds" style="width:120px"></label>
+      <button class="b primary" id="m-ok">Enregistrer</button>
     </div>
-    <p class="small muted" style="margin:8px 0 0">Les deux totaux Doctolib ventilent les honoraires et le prélèvement exploitant au prorata (méthodo §3.9) ; sans eux, le mois reste en « commun ». Les soldes servent au contrôle des poches.</p>
     <div id="m-ventilation" style="margin-top:10px"></div>
     <div id="m-manuel" style="margin-top:8px"></div>
   </div>
   <div class="card">
-    <h2>Virements vers livrets à affecter <span class="muted" id="m-affect-n"></span></h2>
-    <p class="small muted" style="margin:0 0 8px">Précaution tant qu'elle n'est pas à sa cible, sinon « non alloué » ; un montant récurrent reprend la poche de la fois précédente.</p>
+    <h2 title="Précaution tant qu'elle n'est pas à sa cible, sinon non alloué ; un montant récurrent reprend la poche précédente">Virements à affecter <span class="muted" id="m-affect-n"></span></h2>
     <div id="m-affecter"></div>
   </div>
   <div class="card">
@@ -262,76 +193,90 @@ input,select,textarea{max-width:100%}
     <div class="edit hidden" id="p-edit"></div>
   </div>
 </section>
+
 <section class="screen" id="screen-bord">
   <div class="card">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">Perso — synthèse du mois</h2>
+      <h2 style="margin:0" title="Revenus = REV ; épargne = EPG ; taux d'épargne = épargne ÷ revenus ; dépenses = le reste, avoirs déduits, hors interne et hors budget">Perso — mois</h2>
       <label class="small muted">Mois <select id="b-mois"></select></label>
     </div>
     <div id="b-synthese" style="margin-top:10px"></div>
-    <p class="small muted" style="margin:8px 0 0">Revenus = <span class="cat">REV</span> (prélèvement exploitant, remboursements, famille…). Épargne = virements vers livrets, PEA, assurance-vie, crypto (<span class="cat">EPG</span>). Taux d'épargne = épargne ÷ revenus. Dépenses = tout le reste, avoirs déduits, hors mouvements internes et hors budget (<span class="cat">HB</span>). La colonne « moyenne » porte sur tous les mois importés, mois incomplets compris.</p>
   </div>
   <div class="card">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">Perso — budget cible et écart au plan</h2>
-      <button class="b primary small" id="b-budget-ok">Enregistrer le budget</button>
+      <h2 style="margin:0" title="Cible mensuelle par famille ou sous-catégorie ; écart = réalisé − cible">Perso — budget cible</h2>
+      <button class="b primary small" id="b-budget-ok">Enregistrer</button>
     </div>
-    <p class="small muted" style="margin:6px 0 0">Saisis une cible mensuelle par famille ou par sous-catégorie (si seules des sous-catégories sont renseignées, la famille en fait la somme). Écart = réalisé − cible : en rouge quand la dépense dépasse la cible, ou quand l'épargne est sous la sienne. Les cibles sont enregistrées dans <code>rules.json › config.budget_cible</code>.</p>
-    <div style="overflow:auto;margin-top:8px"><table id="b-budget"><thead><tr><th>Famille / catégorie</th><th style="text-align:right">Réalisé (mois)</th><th style="text-align:right">Moyenne / mois</th><th style="text-align:right">Cible € / mois</th><th style="text-align:right">Écart</th></tr></thead><tbody></tbody></table></div>
+    <div style="overflow:auto;margin-top:8px"><table id="b-budget"><thead><tr><th>Famille / catégorie</th><th style="text-align:right">Réalisé</th><th style="text-align:right">Moyenne</th><th style="text-align:right">Cible</th><th style="text-align:right">Écart</th></tr></thead><tbody></tbody></table></div>
   </div>
   <div class="card">
-    <h2>Perso — taux d'épargne par mois</h2>
-    <div style="overflow:auto"><table id="b-mensuel"><thead><tr><th>Mois</th><th style="text-align:right">Revenus</th><th style="text-align:right">Dépenses</th><th style="text-align:right">Épargne</th><th style="text-align:right">Taux d'épargne</th><th style="text-align:right">Non catégorisé</th></tr></thead><tbody></tbody></table></div>
+    <h2>Perso — taux d'épargne</h2>
+    <div style="overflow:auto"><table id="b-mensuel"><thead><tr><th>Mois</th><th style="text-align:right">Revenus</th><th style="text-align:right">Dépenses</th><th style="text-align:right">Épargne</th><th style="text-align:right">Taux</th><th style="text-align:right">Non catégorisé</th></tr></thead><tbody></tbody></table></div>
   </div>
   <div class="card">
-    <h2>Pro — trésorerie du mois par entité</h2>
+    <h2 title="Honoraires et prélèvement exploitant ventilés Nice / EHPAD au prorata des totaux Doctolib ; rétention = (encaissements − versé au perso) ÷ encaissements">Pro — par entité</h2>
     <div id="b-pro"></div>
-    <p class="small muted" style="margin:8px 0 0">Entrées et sorties uniquement, pas de comptabilité. Honoraires et prélèvement exploitant ventilés Nice / EHPAD au prorata des totaux Doctolib saisis dans l'onglet Mensuel (sinon « commun »). Taux de rétention effectif = (encaissements − versé au perso) ÷ encaissements, à comparer à la règle des 50 %.</p>
   </div>
   <div class="card">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">Pro — provisions et trésorerie libre</h2>
-      <button class="b primary small" id="b-prov-ok">Enregistrer les taux</button>
+      <h2 style="margin:0" title="Taux en % des encaissements ; trésorerie libre = solde pro − provisions dues non prélevées">Pro — provisions et trésorerie libre</h2>
+      <button class="b primary small" id="b-prov-ok">Enregistrer</button>
     </div>
     <div class="row" style="margin-top:8px" id="b-prov-saisie"></div>
-    <p class="small muted" style="margin:6px 0 0">Taux en % des encaissements du mois, base provisoire : les vrais taux et assiettes viendront du doc <b>Fiscalité &amp; plafonds</b> (vide = non calculé). Trésorerie libre = solde du compte pro relevé dans le dernier CSV − provisions dues non encore prélevées (provisions théoriques cumulées sur les mois importés − cotisations payées sur ces mois, plancher zéro).</p>
     <div id="b-treso" style="margin-top:8px"></div>
   </div>
   <div class="card">
-    <h2>Abonnements <span class="muted" id="b-abos-n"></span></h2>
+    <h2 title="Nouveau = apparu le dernier mois ; disparu = absent depuis 2 mois ; après la fin prévue = encore prélevé">Abonnements <span class="muted" id="b-abos-n"></span></h2>
     <div id="b-abos-alertes"></div>
-    <p class="small muted" style="margin:0 0 8px">Une ligne par marchand classé <span class="cat">ABO</span> sur le perso. « Nouveau » = apparu le dernier mois importé ; « disparu » = absent depuis au moins 2 mois ; « prélevé après la fin prévue » = tu pensais l'avoir résilié. Le nom, la fin prévue et « ignorer » sont enregistrés dans <code>rules.json › abonnements</code>.</p>
-    <div style="overflow:auto"><table id="b-abos"><thead><tr><th>Nom</th><th>Clé marchand</th><th style="text-align:right">Dernier montant</th><th>Périodicité</th><th>Vu</th><th>Statut</th><th>Fin prévue (AAAA-MM)</th><th>Ignorer</th></tr></thead><tbody></tbody></table></div>
+    <div style="overflow:auto"><table id="b-abos"><thead><tr><th>Nom</th><th>Clé</th><th style="text-align:right">Montant</th><th>Périodicité</th><th>Vu</th><th>Statut</th><th>Fin prévue</th><th>Ignorer</th></tr></thead><tbody></tbody></table></div>
   </div>
 </section>
 
-<section class="screen" id="screen-regles">
-  <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Légende des codes (survole un code n'importe où pour voir sa définition)</summary><div id="legende-2" class="small" style="margin-top:8px"></div></details>
+<section class="screen" id="screen-avance">
   <div class="card">
     <h2>Paramètres</h2>
     <div class="row">
-      <label class="small muted">Nom du titulaire tel qu'il apparaît dans les libellés (pour reconnaître les virements à toi-même, ex. Revolut) :</label>
+      <label class="small muted" title="Pour reconnaître les virements à toi-même (Revolut…)">Nom du titulaire</label>
       <input type="text" id="cfg-titulaire" placeholder="PRENOM NOM" style="min-width:220px">
       <button class="b small" id="cfg-titulaire-ok">Enregistrer</button>
     </div>
     <div class="row" style="margin-top:8px">
-      <button class="b" id="btn-recat">Recatégoriser toutes les lignes non validées</button>
-      <span class="small muted">À utiliser après avoir désactivé ou réactivé des règles.</span>
+      <button class="b" id="btn-recat" title="Après avoir désactivé ou réactivé des règles">Recatégoriser les lignes non validées</button>
     </div>
   </div>
   <div class="card">
     <div class="row" style="justify-content:space-between">
       <h2 style="margin:0">Règles <span class="muted" id="regles-count"></span></h2>
       <div class="row">
-        <select id="f-source"><option value="user">apprises (mes corrections)</option><option value="seed">amorçage (méthodo)</option><option value="">toutes</option></select>
+        <select id="f-source"><option value="user">apprises</option><option value="seed">amorçage</option><option value="">toutes</option></select>
         <input type="text" id="f-regle" placeholder="filtrer">
       </div>
     </div>
     <div style="overflow:auto;margin-top:10px"><table id="regles"><thead><tr><th>Id</th><th>Type</th><th>Motif</th><th>Compte</th><th>Sens</th><th>Montant</th><th>Catégorie</th><th>Entité</th><th>Hits</th><th>Actif</th></tr></thead><tbody></tbody></table></div>
   </div>
+  <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Historique des règles remplacées</summary>
+    <div style="overflow:auto;margin-top:8px"><table id="historique"><thead><tr><th>Remplacée le</th><th>Id</th><th>Motif</th><th>Ancienne catégorie</th></tr></thead><tbody></tbody></table></div>
+  </details>
+  <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Légende des codes</summary><div id="legende-1" class="small" style="margin-top:8px"></div></details>
+  <div class="card" id="gh-connecte">
+    <h2>Compte</h2>
+    <p class="small" id="sync-etat" style="margin:0 0 8px"></p>
+    <div class="row">
+      <button class="b" id="btn-verifier">Vérifier GitHub</button>
+      <button class="b" id="gh-phrase-changer">Changer la phrase</button>
+      <button class="b" id="gh-deconnecter">Déconnecter cet appareil</button>
+    </div>
+  </div>
   <div class="card">
-    <h2>Historique des règles remplacées</h2>
-    <div style="overflow:auto"><table id="historique"><thead><tr><th>Remplacée le</th><th>Id</th><th>Motif</th><th>Ancienne catégorie</th></tr></thead><tbody></tbody></table></div>
+    <h2 title="Copie en clair de toutes les données, à garder hors du dépôt">Sauvegarde</h2>
+    <div class="row">
+      <button class="b" id="btn-export">Exporter les JSON</button>
+      <label class="b" style="cursor:pointer" title="Remplace ce qui est affiché par les fichiers choisis">Importer les JSON<input type="file" id="in-json" accept=".json" multiple class="hidden"></label>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Tests</h2><button class="b small" id="btn-tests">Lancer</button></div>
+    <div id="tests" style="margin-top:10px"></div>
   </div>
 </section>
 
@@ -341,9 +286,8 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.6.1-mobile';
+const APP_VERSION = '0.7.0-minimal';
 const SCHEMA = 1;
-const FICHIERS = { rules: 'rules.json', data: 'data.json' };
 
 const util = {
   nowIso() { return new Date().toISOString(); },
@@ -474,24 +418,7 @@ const serial = {
     }
     return JSON.stringify(v);
   },
-  stringify(obj) { return serial.fmt(serial.sortDeep(obj), 0) + '\n'; },
-  aConflit(text) { return /^(<{7}|={7}|>{7})/m.test(text); },
-  // Sépare un fichier portant des marqueurs de conflit Git en deux textes complets : « ici » (bloc <<<<<<<) et « autre poste » (bloc >>>>>>>).
-  // Un éventuel bloc de base (||||||| en mode diff3) est ignoré. Renvoie null si les marqueurs sont incohérents.
-  separerConflit(text) {
-    const ici = [], autre = []; let zone = 'commun';
-    for (const l of String(text).split('\n')) {
-      if (/^<{7}/.test(l)) { if (zone !== 'commun') return null; zone = 'ici'; continue; }
-      if (/^\|{7}/.test(l)) { if (zone !== 'ici') return null; zone = 'base'; continue; }
-      if (/^={7}\s*$/.test(l)) { if (zone !== 'ici' && zone !== 'base') return null; zone = 'autre'; continue; }
-      if (/^>{7}/.test(l)) { if (zone !== 'autre') return null; zone = 'commun'; continue; }
-      if (zone === 'commun') { ici.push(l); autre.push(l); } else if (zone === 'ici') ici.push(l); else if (zone === 'autre') autre.push(l);
-    }
-    if (zone !== 'commun') return null;
-    // Git peut produire deux virgules collées ou une virgule manquante entre deux objets d'une liste : on normalise
-    const nettoyer = (lignes) => lignes.join('\n').replace(/,(\s*\n\s*),/g, ',$1').replace(/\}\n(\s*)\{/g, '},\n$1{').replace(/,(\s*\n\s*[\]}])/g, '$1');
-    return { ici: nettoyer(ici), autre: nettoyer(autre) };
-  }
+  stringify(obj) { return serial.fmt(serial.sortDeep(obj), 0) + '\n'; }
 };
 
 // ---------------------------------------------------------- catalogue des catégories (Méthodo §2-§4)
@@ -1369,7 +1296,6 @@ const tests = {
       ['compte perso / pro détecté', () => csv.compte('BoursoBank') === 'perso' && csv.compte('Compte Bourso Business') === 'pro' && csv.compte('Autre') === null],
       ['déduplication : réimport → 0 insertion', () => { const r = csv.toOperations(csv.parse(entete + '\n' + ligne('2026-10-03', 'CARTE 03/10/26 MONOPRIX CB*1', '-23,40', P)), 't'); const d1 = modele.dedup([], r.ops); const d2 = modele.dedup(d1.inserees, r.ops); return d1.inserees.length === 1 && d2.inserees.length === 0; }],
       ['écriture déterministe, un objet par ligne, relecture identique', () => { const s = serial.stringify({ operations: [{ z: 1, a: 2 }] }); const o = modele.rulesDefaut('TEST'); const t = serial.stringify(o); return s === '{\n  "operations": [\n    {"a":2,"z":1}\n  ]\n}\n' && serial.stringify(JSON.parse(t)) === t; }],
-      ['marqueurs de conflit Git détectés', () => serial.aConflit('{\n<<<<<<< HEAD\n}') && !serial.aConflit('{"a":"<<<<<<< x"}')],
       ['seeds : toutes les regex compilent', () => SEEDS.every(s => engine.rx(s[0]))],
       ['seeds : ' + SEEDS.length + ' règles préchargées, ajout des manquantes sans doublon', () => { const r = modele.rulesDefaut('T'); r.rules.pop(); const n = r.rules.length; modele.migrer(r, modele.dataDefaut('T')); return r.rules.length === n + 1 && new Set(r.rules.map(x => x.seed_key)).size === SEEDS.length; }],
       ['perso : loyer, Monoprix, Escota, Bitstack, livret, PEA', () => { const j = jeu([ligne('2026-10-02', 'PRLV SEPA VIZCAYA SCI', '-980,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-43,18', P), ligne('2026-10-08', 'CARTE 07/10/26 ESCOTA CB*1', '-8,40', P), ligne('2026-10-10', 'TDF EMIS VIA CB BITSTACK CB*1', '-25,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); return j.par('PRLV SEPA VIZCAYA SCI').categorie === 'FIX.LOYER' && j.par('CARTE 04/10/26 MONOPRIX CB*1').categorie === 'ALIM.COURSES' && j.par('CARTE 07/10/26 ESCOTA CB*1').categorie === 'MOB.PEAGE' && j.par('TDF EMIS VIA CB BITSTACK CB*1').categorie === 'EPG.CRYPTO' && j.par('VIR Virement vers LIVRET A').categorie === 'EPG.LA' && j.par('VIR Virement vers PEA').categorie === 'EPG.PEA' && j.par('VIR Virement vers PEA').interne === true; }],
@@ -1410,8 +1336,6 @@ const tests = {
       ['bord abonnements : mensuel / nouveau / disparu / vu 1 fois, fin prévue, ignorer', () => { const j = jeu([ligne('2026-08-22', 'PRLV SEPA ZWIFT INC', '-17,99', P), ligne('2026-09-22', 'PRLV SEPA ZWIFT INC', '-17,99', P), ligne('2026-10-22', 'PRLV SEPA ZWIFT INC', '-17,99', P), ligne('2026-08-06', 'PRLV SEPA PAYPAL EUROPE', '-11,12', P), ligne('2026-10-30', 'CARTE 29/10/26 APPLE.COM/BILL CB*1', '-2,99', P), ligne('2026-10-01', 'CARTE 30/09/26 MONOPRIX CB*1', '-9,00', P)]); const a = bord.abonnements(j.d, j.r); const L = n => a.lignes.find(l => l.cle.includes(n)); const ok1 = a.ref === '2026-10' && a.lignes.length === 3 && L('ZWIFT').periodicite === 'mensuel' && L('ZWIFT').statut === 'actif' && L('ZWIFT').montant === 17.99 && L('PAYPAL').statut === 'disparu' && L('APPLE').statut === 'nouveau' && L('APPLE').periodicite === 'vu 1 fois' && a.alertes.length === 2; bord.configAbonnement(j.r, L('PAYPAL').cle, { ignore: true, nom: 'Spotify' }); bord.configAbonnement(j.r, L('ZWIFT').cle, { fin_prevue: '2026-09' }); const b = bord.abonnements(j.d, j.r); return ok1 && b.alertes.length === 2 && b.lignes.find(l => l.nom === 'Spotify').ignore === true && b.lignes.find(l => l.cle.includes('ZWIFT')).statut === 'prélevé après la fin prévue'; }],
       ['migration : budget_cible, provisions, abonnements, soldes ajoutés aux anciens fichiers', () => { const r = modele.rulesDefaut('T'); delete r.config.budget_cible; delete r.abonnements; const d = modele.dataDefaut('T'); delete d.soldes; const m = modele.migrer(r, d); return m === true && r.config.budget_cible && Array.isArray(r.abonnements) && d.soldes && modele.migrer(r, d) === false; }],
       // étape 5 : fusion de deux data.json
-      ['conflit Git : les deux versions sont reconstituées et relues en JSON', () => { const a = modele.dataDefaut('A'); a.operations = [stats.opManuelle('pro', '2026-10-31', 'HON.ESP', 100, 'a')]; const b = modele.dataDefaut('B'); b.operations = [stats.opManuelle('pro', '2026-10-31', 'HON.ESP', 200, 'b')]; const la = serial.stringify(modele.pourEcriture('data', a)).split('\n'), lb = serial.stringify(modele.pourEcriture('data', b)).split('\n'); const diff = la.map((l, i) => l !== lb[i] ? i : -1).filter(i => i >= 0); const conflit = la.map((l, i) => diff.includes(i) ? `<<<<<<< HEAD\n${l}\n=======\n${lb[i]}\n>>>>>>> origin/main` : l).join('\n'); const s = serial.separerConflit(conflit); return serial.aConflit(conflit) && s && JSON.parse(s.ici).operations[0].montant === 100 && JSON.parse(s.autre).operations[0].montant === 200 && JSON.parse(s.ici).meta.machine === 'A' && serial.separerConflit('{\n<<<<<<< a\n}') === null; }],
-      ['conflit Git : virgule manquante ou doublée entre deux opérations réparée', () => { const t = '{\n  "operations": [\n<<<<<<< HEAD\n    {"id":"a"}\n=======\n    {"id":"b"},\n    {"id":"c"}\n>>>>>>> x\n  ]\n}'; const s = serial.separerConflit(t); return JSON.parse(s.ici).operations.length === 1 && JSON.parse(s.autre).operations.length === 2; }],
       ['fusion : union des opérations, lignes propres à chaque côté conservées', () => { const a = modele.dataDefaut('A'); a.operations = [stats.opManuelle('perso', '2026-10-01', 'REV.AUTRE', 10, 'x'), stats.opManuelle('perso', '2026-10-02', 'REV.AUTRE', 20, 'y')]; const b = modele.dataDefaut('B'); b.operations = [JSON.parse(JSON.stringify(a.operations[0])), stats.opManuelle('perso', '2026-10-03', 'REV.AUTRE', 30, 'z')]; const f = modele.fusionner(a, b); return f.data.operations.length === 3 && f.bilan.communes === 1 && f.bilan.identiques === 1 && f.bilan.ici_seul === 1 && f.bilan.autre_seul === 1 && f.data.meta.machine === 'A'; }],
       ['fusion : une ligne validée d\'un côté gagne sur une ligne auto de l\'autre ; à égalité « ici » gagne ; poche complétée', () => { const op = () => modele.op({ id: 'o1', compte: 'perso', type: 'carte', date_op: '2026-10-05', libelle: 'X', montant: -10, cle: 'X', categorie: 'ALIM.COURSES', statut: 'auto' }); const a = modele.dataDefaut('A'), b = modele.dataDefaut('B'); a.operations = [op()]; b.operations = [Object.assign(op(), { categorie: 'ALIM.CAFE', statut: 'valide', poche: null })]; a.operations[0].poche = 'JAPON-2027'; const f1 = modele.fusionner(a, b); const c = modele.dataDefaut('C'); c.operations = [Object.assign(op(), { categorie: 'SANTE' })]; const f2 = modele.fusionner(a, c); return f1.data.operations[0].categorie === 'ALIM.CAFE' && f1.data.operations[0].statut === 'valide' && f1.data.operations[0].poche === 'JAPON-2027' && f1.bilan.prises_autre === 1 && f1.bilan.completees === 1 && f2.data.operations[0].categorie === 'ALIM.COURSES' && f2.bilan.prises_autre === 0; }],
       ['fusion rules.json : règles des deux postes réunies, appariements, poches, abonnements, compteurs, config complétée', () => { const a = modele.rulesDefaut('PC'), b = modele.rulesDefaut('MAC'); const ja = jeu([ligne('2026-10-01', 'CARTE 01/10/26 INCONNU CB*1', '-10,00', P)]), jb = jeu([ligne('2026-10-02', 'CARTE 02/10/26 AUTRE CB*1', '-10,00', P)]); engine.corriger(ja.d, a, 'PC', ja.d.operations[0], { categorie: 'SANTE' }); engine.corriger(jb.d, b, 'MAC', jb.d.operations[0], { categorie: 'ABO' }); b.appariements.push({ id_pro: 'x', id_perso: 'y', type: 'KINE' }); b.poches.push({ tag: 'VELO', nom: 'Vélo', support: 'EPG.LA', cible: 500, echeance: null, ajustements: [], actif: true }); b.poches.find(p => p.tag === 'PRECAUTION').cible = 9000; b.abonnements.push({ cle: 'ZWIFT', nom: 'Zwift', fin_prevue: null, ignore: false }); b.config.titulaire = 'Jean Dupont'; b.config.provisions.URSSAF = 20; a.config.provisions.CARPIMKO = 10; b.tiers['PAUL MARTIN'] = { categorie: 'HB.AVANCES', entite: null, nature: null }; const f = modele.fusionnerRegles(a, b); const r = f.rules; const self = modele.fusionnerRegles(r, r); return r.rules.filter(x => x.source === 'user').length === 2 && r.rules.some(x => x.id === 'r-MAC-0001') && r.rules.some(x => x.id === 'r-PC-0001') && new Set(r.rules.map(x => x.id)).size === r.rules.length && r.appariements.length === 1 && r.poches.some(p => p.tag === 'VELO') && r.poches.find(p => p.tag === 'PRECAUTION').cible === 9000 && r.abonnements.length === 1 && r.config.titulaire === 'Jean Dupont' && r.config.provisions.URSSAF === 20 && r.config.provisions.CARPIMKO === 10 && r.config.compteurs.PC === 1 && r.config.compteurs.MAC === 1 && r.tiers['PAUL MARTIN'] && r.meta.machine === 'PC' && f.bilan.regles_autre === 1 && serial.stringify(self.rules) === serial.stringify(r); }],
@@ -1437,35 +1361,15 @@ const idb = {
   async set(k, v) { try { const db = await idb.open(); await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite').objectStore('kv').put(v, k); t.onsuccess = res; t.onerror = () => rej(t.error); }); } catch { } }
 };
 
-let machine = localStorage.getItem('budget.machine');
-if (!machine) { machine = (prompt('Nom de cette machine (ex. PC ou MAC). Il sert à savoir quel poste a écrit en dernier.', 'PC') || 'PC').trim().toUpperCase().slice(0, 12); localStorage.setItem('budget.machine', machine); }
-$('#badge-machine').textContent = 'machine : ' + machine;
+const UA = navigator.userAgent || '';
+let machine = localStorage.getItem('budget.machine') || (/iPhone|iPad/.test(UA) ? 'IPHONE' : /Macintosh/.test(UA) ? 'MAC' : /Android/.test(UA) ? 'ANDROID' : 'PC');
 
-const etat = { handle: null, rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, fsapi: !!window.showDirectoryPicker, editionId: null };
-if (!etat.fsapi) {
-  $('#fsapi-msg').innerHTML = location.protocol === 'file:'
-    ? 'Ce navigateur n\'autorise pas l\'écriture sur disque depuis un fichier ouvert en double-clic. Dans Brave : <code>brave://flags/#file-system-access-api</code> → Enabled → relancer. Sinon lance <b>ouvrir.bat</b> (Windows) ou <b>ouvrir.command</b> (Mac) et ouvre <code>http://127.0.0.1:8765</code> dans Chrome ou Edge. Secours : <b>Importer les JSON</b> au début et <b>Exporter les JSON</b> à la fin de chaque session.'
-    : 'Ce navigateur ne permet pas d\'écrire directement sur disque (il faut Chrome ou Edge, ou Brave avec le réglage activé) : utilise <b>Importer les JSON</b> au début et <b>Exporter les JSON</b> à la fin de chaque session.';
-  $('#btn-ouvrir').disabled = true;
-}
+const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null };
 
 function marquer(nom) { etat.dirty[nom] = true; }
 function toutRendre() { rendreEtat(); rendreOps(); rendreValidation(); rendreRegles(); rendreMensuel(); rendreBord(); majBoutons(); }
 
-// ---------- backends : où vivent les fichiers. Chacun expose pret(), lireTexte(nom) → texte ou null (absent), et ecrireTexte(nom, texte).
-// `disque` = dossier du dépôt ouvert avec l'API File System Access (fonctionnement historique, PC/Mac).
-// `github` = un seul fichier chiffré data/store.json.enc dans le dépôt privé, lu/écrit par l'API GitHub (étape 6 : PC, Mac et téléphone).
-const backendDisque = {
-  nom: 'disque', libelle: 'disque',
-  pret() { return !!etat.handle; },
-  async lireTexte(nom) {
-    const fh = await etat.handle.getFileHandle(FICHIERS[nom], { create: false }).catch(e => { if (e.name === 'NotFoundError') return null; throw e; });
-    if (!fh) return null;
-    return await (await fh.getFile()).text();
-  },
-  async ecrireTexte(nom, texte) { const fh = await etat.handle.getFileHandle(FICHIERS[nom], { create: true }); const w = await fh.createWritable(); await w.write(texte); await w.close(); }
-};
-
+// ---------- stockage : un seul fichier chiffré data/store.json.enc dans le dépôt privé, lu/écrit par l'API GitHub (PC, Mac, téléphone)
 const SYNC_DELAI = 3000, SYNC_RETENTATIVE = 30000;
 // Le store lit/écrit un cache en mémoire ; chaque écriture programme un envoi chiffré vers GitHub 3 s après la dernière (un commit par rafale).
 // Hors ligne : la dernière enveloppe connue (déjà chiffrée) est gardée dans IndexedDB ; les modifications attendent le retour du réseau.
@@ -1554,215 +1458,122 @@ const backendGitHub = {
     this.enAttente = true; await this.pousser();
   }
 };
-etat.backend = backendDisque;
-const SYNC_LIBELLES = { deconnecte: ['GitHub : non connecté', 'gris'], synchronise: ['GitHub : synchronisé', 'ok'], attente: ['GitHub : envoi en attente', 'warn'], horsligne: ['hors ligne : modifications en attente', 'warn'], erreur: ['GitHub : erreur', 'bad'] };
+const SYNC_LIBELLES = { deconnecte: ['non connecté', 'gris'], synchronise: ['synchronisé', 'ok'], attente: ['envoi en attente', 'warn'], horsligne: ['hors ligne', 'warn'], erreur: ['erreur', 'bad'] };
 function rendreSync() {
-  const b = $('#badge-sync'); const gh = etat.backend === backendGitHub;
-  b.classList.toggle('hidden', !gh); if (!gh) return;
   const [txt, cls] = SYNC_LIBELLES[backendGitHub.sync] || SYNC_LIBELLES.deconnecte;
-  b.textContent = txt; b.className = 'badge ' + cls; b.title = backendGitHub.detail || '';
-  const a = backendGitHub.aad; $('#sync-etat').textContent = a ? `Dernière version sur GitHub : écrite par ${a.machine || '?'} le ${fmtDate(a.ecrit_le)} (n° ${a.seq})` : '';
+  const b = $('#badge-sync'); b.textContent = txt; b.className = 'badge ' + cls; b.title = backendGitHub.detail || '';
+  const a = backendGitHub.aad; $('#sync-etat').textContent = a ? `${backendGitHub.cfg ? backendGitHub.cfg.owner + '/' + backendGitHub.cfg.repo + ' · ' : ''}dernière version : ${a.machine || '?'}, ${fmtDate(a.ecrit_le)} (n° ${a.seq})` : '';
 }
+function fmtDate(iso) { if (!iso) return '?'; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); }
 
-// ---------- store : lecture/écriture des deux fichiers à travers etat.backend, validation, conflits, fraîcheur
+// ---------- store : les deux objets rules et data, validés, lus et écrits dans le cache du backend (qui les chiffre et les envoie)
 const store = {
   async lire(nom) {
-    const text = await etat.backend.lireTexte(nom);
+    const text = await backendGitHub.lireTexte(nom);
     if (text === null) return { absent: true };
-    if (serial.aConflit(text)) return { conflit: true, text };
-    let obj; try { obj = JSON.parse(text); } catch (e) { return { erreur: `${FICHIERS[nom]} : JSON invalide (${e.message})` }; }
+    let obj; try { obj = JSON.parse(text); } catch (e) { return { erreur: `${nom} : JSON invalide (${e.message})` }; }
     const err = modele.valider(nom, obj); if (err) return { erreur: err };
     return { obj };
   },
-  async ecrire(nom, obj) { await etat.backend.ecrireTexte(nom, serial.stringify(modele.pourEcriture(nom, obj))); },
-  async charger({ silencieux } = {}) {
-    const lus = {}; for (const nom of ['rules', 'data']) lus[nom] = await store.lire(nom);
-    const conflits = ['rules', 'data'].filter(nom => lus[nom].conflit);
-    if (conflits.length) { montrerConflit(lus); return false; }
+  async ecrire(nom, obj) { await backendGitHub.ecrireTexte(nom, serial.stringify(modele.pourEcriture(nom, obj))); },
+  async charger() {
     for (const nom of ['rules', 'data']) {
-      const r = lus[nom];
+      const r = await store.lire(nom);
       if (r.erreur) { toast(r.erreur, 'bad'); return false; }
-      if (r.absent) { etat[nom] = nom === 'rules' ? modele.rulesDefaut(machine) : modele.dataDefaut(machine); await store.ecrire(nom, etat[nom]); etat.charge[nom] = etat[nom].meta.ecrit_le; if (!silencieux) toast(`${FICHIERS[nom]} créé`, 'ok'); }
-      else { etat[nom] = r.obj; etat.charge[nom] = r.obj.meta.ecrit_le; }
-      etat.dirty[nom] = false;
+      if (r.absent) { etat[nom] = nom === 'rules' ? modele.rulesDefaut(machine) : modele.dataDefaut(machine); await store.ecrire(nom, etat[nom]); }
+      else etat[nom] = r.obj;
+      etat.charge[nom] = etat[nom].meta.ecrit_le; etat.dirty[nom] = false;
     }
     if (modele.migrer(etat.rules, etat.data)) { marquer('rules'); marquer('data'); }
     recategoriser();
     toutRendre();
-    if (etat.dirty.rules || etat.dirty.data) await store.enregistrer({ silencieux: true });
+    if (etat.dirty.rules || etat.dirty.data) await store.enregistrer();
     return true;
   },
-  async enregistrer({ silencieux } = {}) {
-    if (!etat.backend.pret()) { toast(etat.backend === backendGitHub ? 'Connecte-toi d\'abord à GitHub' : 'Ouvre d\'abord le dossier', 'bad'); return false; }
+  async enregistrer() {
+    if (!backendGitHub.pret()) { toast('Non connecté', 'bad'); return false; }
     for (const nom of ['rules', 'data']) {
       if (!etat.dirty[nom]) continue;
-      const r = await store.lire(nom);
-      if (r.conflit) { toast(`${FICHIERS[nom]} contient un conflit Git : rien n'est écrit`, 'bad'); return false; }
-      if (r.obj && r.obj.meta.ecrit_le !== etat.charge[nom]) { montrerStale(nom, r.obj.meta); return false; }
       etat[nom].meta = modele.meta(machine);
       await store.ecrire(nom, etat[nom]);
       etat.charge[nom] = etat[nom].meta.ecrit_le; etat.dirty[nom] = false;
     }
     rendreEtat(); majBoutons();
-    if (!silencieux) toast(etat.backend === backendGitHub ? 'Enregistré, envoi vers GitHub dans 3 s' : 'Enregistré sur disque', 'ok');
     return true;
   },
-  // GitHub : relit le dépôt ; version plus récente là-bas → rechargée, ou fusionnée avec les modifications en cours ici
-  async verifierGitHub({ silencieux } = {}) {
+  // relit GitHub ; version plus récente là-bas → rechargée, ou fusionnée avec les modifications en cours ici
+  async verifier({ silencieux } = {}) {
+    if (!backendGitHub.pret()) return;
     let r;
     try { r = await backendGitHub.tirer(); }
-    catch (e) { if (e.code === 'PHRASE') { await idb.set('cle.protegee', null); montrerFormulaireGitHub('La phrase de passe ne déchiffre plus le fichier : elle a peut-être été changée sur un autre appareil. Saisis la phrase actuelle.'); } else toast(e.message, 'bad'); return; }
-    if (r.horsligne && !r.cacheLocal) { if (!silencieux) toast('Hors ligne : affichage de la dernière version connue', 'warn'); return; }
-    if (r.absent || !r.change) { if (!silencieux) toast(r.absent ? 'Aucun fichier sur GitHub' : 'GitHub est à jour', 'ok'); if (backendGitHub.enAttente) backendGitHub.envoyerMaintenant(); return; }
-    const qui = `${r.aad.machine || '?'} le ${fmtDate(r.aad.ecrit_le)}`;
-    if (!etat.dirty.rules && !etat.dirty.data) { await store.charger({ silencieux: true }); toast(r.cacheLocal ? 'Hors ligne : dernière version conservée sur cet appareil' : `Rechargé : version écrite par ${qui}`, 'ok'); return; }
+    catch (e) { if (e.code === 'PHRASE') { await idb.set('cle.protegee', null); deconnecterUI('La phrase de passe a changé sur un autre appareil : saisis la phrase actuelle'); } else toast(e.message, 'bad'); return; }
+    if (r.horsligne && !r.cacheLocal) { if (!silencieux) toast('Hors ligne : dernière version connue', 'warn'); return; }
+    if (r.absent || !r.change) { if (!silencieux) toast(r.absent ? 'Aucun fichier sur GitHub' : 'À jour', 'ok'); if (backendGitHub.enAttente) backendGitHub.envoyerMaintenant(); return; }
+    const qui = `${r.aad.machine || '?'}, ${fmtDate(r.aad.ecrit_le)}`;
+    if (!etat.dirty.rules && !etat.dirty.data) { await store.charger(); toast(r.cacheLocal ? 'Hors ligne : version conservée sur cet appareil' : `Rechargé : version ${qui}`, 'ok'); return; }
     const f = coffre.fusionner({ rules: etat.rules, data: etat.data }, backendGitHub.cache);
     etat.rules = f.rules; etat.data = f.data; marquer('rules'); marquer('data');
     for (const nom of ['rules', 'data']) etat.charge[nom] = backendGitHub.cache[nom].meta.ecrit_le;
     modele.migrer(etat.rules, etat.data); recategoriser(); toutRendre();
-    await store.enregistrer({ silencieux: true });
-    toast(`Fusionné avec la version écrite par ${qui} : ${f.bilan.autre_seul || 0} opération(s), ${f.bilan.regles_autre || 0} règle(s) reprises`, 'ok');
-  },
-  async verifier({ silencieux } = {}) {
-    if (!etat.backend.pret()) return;
-    if (etat.backend === backendGitHub) return store.verifierGitHub({ silencieux });
-    let plusRecent = null;
-    for (const nom of ['rules', 'data']) { const r = await store.lire(nom); if (r.conflit) { await store.charger(); return; } if (r.obj && r.obj.meta.ecrit_le !== etat.charge[nom]) plusRecent = { nom, meta: r.obj.meta }; }
-    if (!plusRecent) { if (!silencieux) toast('Le disque est à jour', 'ok'); return; }
-    if (!etat.dirty.rules && !etat.dirty.data) { await store.charger({ silencieux: true }); toast(`Rechargé : ${FICHIERS[plusRecent.nom]} écrit par ${plusRecent.meta.machine || '?'} le ${fmtDate(plusRecent.meta.ecrit_le)}`, 'ok'); }
-    else montrerStale(plusRecent.nom, plusRecent.meta);
+    await store.enregistrer();
+    toast(`Fusionné avec la version ${qui} : ${f.bilan.autre_seul || 0} opération(s), ${f.bilan.regles_autre || 0} règle(s) reprises`, 'ok');
   }
 };
 function recategoriser() { if (!etat.data) return 0; const avantD = JSON.stringify(etat.data.operations), avantR = JSON.stringify([etat.rules.rules, etat.rules.appariements, etat.rules.tiers]); const n = engine.run(etat.data, etat.rules); if (JSON.stringify(etat.data.operations) !== avantD) marquer('data'); if (JSON.stringify([etat.rules.rules, etat.rules.appariements, etat.rules.tiers]) !== avantR) marquer('rules'); return n; }
-// sauvegarde après chaque action utilisateur ; si elle est refusée (disque plus récent), le badge reste
-async function sauver() { toutRendre(); if (etat.backend.pret()) await store.enregistrer({ silencieux: true }); }
-
-// ---------- conflit Git et fusion de data.json (étape 5)
-// Lit les deux côtés d'un texte en conflit ; renvoie { ici, autre } (objets validés) ou { erreur }
-function lireConflit(nom, text) {
-  const s = serial.separerConflit(text);
-  if (!s) return { erreur: 'marqueurs de conflit incomplets ou imbriqués' };
-  const out = {};
-  for (const [k, t] of [['ici', s.ici], ['autre', s.autre]]) {
-    let obj; try { obj = JSON.parse(t); } catch (e) { return { erreur: `version « ${k === 'ici' ? 'ce poste' : 'autre poste'} » illisible (${e.message})` }; }
-    const err = modele.valider(nom, obj); if (err) return { erreur: err };
-    out[k] = obj;
-  }
-  return out;
-}
-// lus = { rules: résultat de store.lire, data: idem } ; un ou deux fichiers en conflit, les deux sont fusionnés d'un coup
-function montrerConflit(lus) {
-  const conflits = ['rules', 'data'].filter(n => lus[n].conflit);
-  $('#conflit-fichier').textContent = conflits.map(n => FICHIERS[n]).join(' et '); $('#conflit').classList.remove('hidden');
-  document.querySelectorAll('main > section').forEach(e => e.classList.add('hidden'));
-  const prep = {}, apercu = []; let erreur = null;
-  for (const nom of conflits) {
-    const lu = lireConflit(nom, lus[nom].text);
-    if (lu.erreur) { erreur = `${FICHIERS[nom]} : ${lu.erreur}`; break; }
-    if (nom === 'data') { const f = modele.fusionner(lu.ici, lu.autre); prep.data = f.data; apercu.push(`<b>data.json</b> — ${bilanFusionData(f.bilan, lu.ici, lu.autre)}`); }
-    else { const f = modele.fusionnerRegles(lu.ici, lu.autre); prep.rules = f.rules; apercu.push(`<b>rules.json</b> — ${bilanFusionRegles(f.bilan, lu.ici, lu.autre)}`); }
-  }
-  $('#conflit-fusion').classList.toggle('hidden', !!erreur);
-  $('#conflit-manuel').classList.toggle('hidden', !erreur);
-  if (erreur) { $('#conflit-manuel-msg').textContent = `Fusion automatique impossible (${erreur}). Résolution à la main, fichier par fichier :`; return; }
-  $('#conflit-apercu').innerHTML = apercu.map(a => `<p style="margin:0 0 4px">${a}</p>`).join('');
-  $('#conflit-fusionner').onclick = async () => {
-    for (const nom of conflits) { prep[nom].meta = modele.meta(machine); await store.ecrire(nom, prep[nom]); }
-    $('#conflit').classList.add('hidden'); document.querySelectorAll('main > section').forEach(e => e.classList.remove('hidden'));
-    await store.charger({ silencieux: true });
-    toast(`${conflits.map(n => FICHIERS[n]).join(' et ')} fusionné(s) et enregistré(s). Pense à git add / commit / push.`, 'ok');
-  };
-}
-function bilanFusionData(b, ici, autre) {
-  return `ce poste (${ici.meta.machine || '?'}, ${ici.operations.length} op.) + autre poste (${autre.meta.machine || '?'}, ${autre.operations.length} op.) → ${b.communes + b.ici_seul + b.autre_seul} opérations : ${b.communes} communes (${b.identiques} identiques, ${b.prises_autre} reprises de l'autre poste, ${b.completees} complétées), ${b.ici_seul} seulement ici, ${b.autre_seul} seulement là-bas ; ${b.mensuel_autre} saisie(s) du mois reprises de l'autre poste`;
-}
-function bilanFusionRegles(b, ici, autre) {
-  const u = (r) => r.rules.filter(x => x.source === 'user').length;
-  return `ce poste (${ici.meta.machine || '?'}, ${u(ici)} règle(s) apprise(s)) + autre poste (${autre.meta.machine || '?'}, ${u(autre)}) → ${b.regles_autre} règle(s) reprise(s) de l'autre poste, ${b.regles_reprises} modifiée(s) là-bas plus récemment, ${b.regles_doublons} doublon(s) sur un même motif archivé(s), ${b.appariements_autre} appariement(s), ${b.poches_autre} poche(s) ou transfert(s), ${b.abonnements_autre} abonnement(s), ${b.tiers_autre} tiers, ${b.config_autre} paramètre(s) complété(s)`;
-}
-// Secours : fusionner un data.json ou rules.json venu d'un autre poste (ou portant encore des marqueurs de conflit) dans ce qui est affiché
-$('#in-fusion').onchange = async e => {
-  const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
-  if (!etat.data) { if (etat.fsapi) { toast('Ouvre d\'abord le dossier du dépôt', 'bad'); return; } etat.rules = modele.rulesDefaut(machine); etat.data = modele.dataDefaut(machine); }
-  for (const f of files) {
-    const nom = f.name === 'rules.json' ? 'rules' : f.name === 'data.json' ? 'data' : null;
-    if (!nom) { toast(`${f.name} : attendu rules.json ou data.json`, 'bad'); continue; }
-    const text = await f.text();
-    let autres = [];
-    if (serial.aConflit(text)) { const lu = lireConflit(nom, text); if (lu.erreur) { toast(`${f.name} : ${lu.erreur}`, 'bad'); continue; } autres = [lu.ici, lu.autre]; }
-    else { let obj; try { obj = JSON.parse(text); } catch { toast(`${f.name} : JSON invalide`, 'bad'); continue; } const err = modele.valider(nom, obj); if (err) { toast(err, 'bad'); continue; } autres = [obj]; }
-    const cumul = (b, r) => { for (const k in r) b[k] = (b[k] || 0) + r[k]; return b; };  // deux côtés d'un conflit → bilans additionnés
-    if (nom === 'data') { const b = {}; for (const a of autres) { const r = modele.fusionner(etat.data, a); etat.data = r.data; cumul(b, r.bilan); } toast(`data.json fusionné : ${b.autre_seul} opération(s) ajoutée(s), ${b.prises_autre} reprise(s), ${b.completees} complétée(s), ${b.mensuel_autre} saisie(s) du mois`, 'ok'); }
-    else { const b = {}; for (const a of autres) { const r = modele.fusionnerRegles(etat.rules, a); etat.rules = r.rules; cumul(b, r.bilan); } toast(`rules.json fusionné : ${b.regles_autre} règle(s) ajoutée(s), ${b.regles_reprises} reprise(s), ${b.appariements_autre} appariement(s), ${b.poches_autre} poche(s)`, 'ok'); }
-    marquer(nom);
-  }
-  modele.migrer(etat.rules, etat.data); recategoriser();
-  await sauver();
+// après chaque action utilisateur : rendu, enregistrement local, envoi regroupé
+async function sauver() { toutRendre(); if (backendGitHub.pret()) await store.enregistrer(); }
+backendGitHub.onFusion = async (f) => {
+  // un envoi a fusionné avec une version distante : l'affichage se réaligne sur le cache (ou s'y fusionne s'il a des modifications en cours)
+  if (etat.dirty.rules || etat.dirty.data) { const g = coffre.fusionner({ rules: etat.rules, data: etat.data }, backendGitHub.cache); etat.rules = g.rules; etat.data = g.data; marquer('rules'); marquer('data'); }
+  else { etat.rules = backendGitHub.cache.rules; etat.data = backendGitHub.cache.data; }
+  for (const nom of ['rules', 'data']) etat.charge[nom] = backendGitHub.cache[nom].meta.ecrit_le;
+  recategoriser(); toutRendre(); if (etat.dirty.rules || etat.dirty.data) await store.enregistrer();
+  toast(`Version de ${f.aad.machine || '?'} fusionnée : ${f.bilan.autre_seul || 0} opération(s), ${f.bilan.regles_autre || 0} règle(s) reprises`, 'ok');
 };
 
-function montrerStale(nom, meta) { $('#stale-msg').textContent = `${FICHIERS[nom]} a été écrit par ${meta.machine || '?'} le ${fmtDate(meta.ecrit_le)}, après le chargement de cette page. Tu as des modifications non enregistrées ici : si tu recharges, elles sont perdues ; si tu gardes l'affichage, l'enregistrement restera bloqué tant que tu n'auras pas rechargé.`; $('#stale').classList.remove('hidden'); }
-$('#stale-reload').onclick = async () => { $('#stale').classList.add('hidden'); await store.charger(); toast('Rechargé depuis le disque'); };
-$('#stale-ignore').onclick = () => $('#stale').classList.add('hidden');
-function fmtDate(iso) { if (!iso) return '?'; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); }
-
-async function ouvrir(h) {
-  if (!h) h = await window.showDirectoryPicker({ mode: 'readwrite' }).catch(e => { if (e.name !== 'AbortError') toast(e.message, 'bad'); return null; });
-  if (!h) return;
-  const perm = await h.requestPermission({ mode: 'readwrite' });
-  if (perm !== 'granted') { toast('Accès refusé au dossier', 'bad'); return; }
-  etat.handle = h; await idb.set('handle', h);
-  $('#badge-dossier').textContent = 'dossier : ' + h.name; $('#badge-dossier').className = 'badge ok';
-  $('#btn-reautoriser').classList.add('hidden');
-  await store.charger();
-}
-$('#btn-ouvrir').onclick = () => ouvrir();
-$('#btn-reautoriser').onclick = async () => { const h = await idb.get('handle'); if (h) await ouvrir(h); };
 $('#btn-verifier').onclick = () => store.verifier();
-$('#btn-enregistrer').onclick = () => store.enregistrer();
-document.addEventListener('visibilitychange', () => { if (!etat.backend.pret()) return; if (document.visibilityState === 'visible') store.verifier({ silencieux: true }); else if (etat.backend === backendGitHub) backendGitHub.envoyerMaintenant(); });
-window.addEventListener('pagehide', () => { if (etat.backend === backendGitHub) backendGitHub.envoyerMaintenant(); });
-window.addEventListener('beforeunload', e => { if (etat.dirty.rules || etat.dirty.data || (etat.backend === backendGitHub && backendGitHub.enAttente)) { if (etat.backend === backendGitHub) backendGitHub.envoyerMaintenant(); e.preventDefault(); e.returnValue = ''; } });
-// ---------- mode GitHub : connexion, migration, phrase, déconnexion (étape 6, lots 3-4)
+document.addEventListener('visibilitychange', () => { if (!backendGitHub.pret()) return; if (document.visibilityState === 'visible') store.verifier({ silencieux: true }); else backendGitHub.envoyerMaintenant(); });
+window.addEventListener('pagehide', () => backendGitHub.envoyerMaintenant());
+window.addEventListener('beforeunload', e => { if (etat.dirty.rules || etat.dirty.data || backendGitHub.enAttente) { backendGitHub.envoyerMaintenant(); e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- connexion, code, phrase, déconnexion
 const ghPrefs = {
   lire() { try { return JSON.parse(localStorage.getItem('budget.github') || 'null'); } catch { return null; } },
   ecrire(o) { if (o) localStorage.setItem('budget.github', JSON.stringify(o)); else localStorage.removeItem('budget.github'); }
 };
 function montrerEcran(nom) { document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nom)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; toutRendre(); }
-function revenirDisque() { etat.backend = backendDisque; backendGitHub.cle = null; backendGitHub.cfg = null; backendGitHub.cache = { rules: null, data: null }; $('#badge-dossier').textContent = 'dossier non ouvert'; $('#badge-dossier').className = 'badge bad'; rendreSync(); }
-function montrerFormulaireGitHub(msg) { $('#gh-form').classList.remove('hidden'); $('#gh-ouvrir').classList.add('hidden'); $('#gh-connecte').classList.add('hidden'); $('#gh-msg').textContent = msg || ''; if (msg) { montrerEcran('import'); $('#gh-phrase').focus(); } }
-function montrerConnecte() { $('#gh-form').classList.add('hidden'); $('#gh-ouvrir').classList.add('hidden'); $('#gh-connecte').classList.remove('hidden'); $('#gh-msg').textContent = ''; $('#gh-phrase').value = ''; $('#gh-token').value = ''; $('#gh-code').value = ''; }
-function montrerCode(msg) { $('#gh-form').classList.add('hidden'); $('#gh-connecte').classList.add('hidden'); $('#gh-ouvrir').classList.remove('hidden'); $('#gh-ouvrir-msg').textContent = msg || 'Cet appareil se souvient de la clé : saisis ton code.'; $('#gh-ouvrir-code').value = ''; montrerEcran('import'); $('#gh-ouvrir-code').focus(); }
+// écran de connexion seul (nav et écrans masqués) ou application
+function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('hidden', !connecte)); }
+function montrerFormulaireGitHub(msg) { montrerApp(false); $('#gh-form').classList.remove('hidden'); $('#gh-ouvrir').classList.add('hidden'); $('#gh-msg').textContent = msg || ''; if (msg) $('#gh-phrase').focus(); }
+function montrerCode(msg) { montrerApp(false); $('#gh-form').classList.add('hidden'); $('#gh-ouvrir').classList.remove('hidden'); $('#gh-ouvrir-msg').textContent = msg || 'Saisis ton code.'; $('#gh-ouvrir-code').value = ''; $('#gh-ouvrir-code').focus(); }
+function deconnecterUI(msg) { backendGitHub.cle = null; backendGitHub.cfg = null; backendGitHub.cache = { rules: null, data: null }; backendGitHub.majSync('deconnecte'); montrerFormulaireGitHub(msg); }
 // clé mémorisée = clé brute chiffrée par le code (idb « cle.protegee ») ; jamais la clé en clair, jamais la phrase
 async function memoriserCle(brute, code) { await idb.set('cle.protegee', brute && code ? await chiffre.proteger(brute, code) : null); await idb.set('cle.essais', 0); }
 $('#gh-souvenir').onchange = () => $('#gh-code-label').classList.toggle('hidden', !$('#gh-souvenir').checked);
-function basculerGitHub() {
-  etat.backend = backendGitHub; etat.handle = null; etat.rules = null; etat.data = null; etat.dirty = { rules: false, data: false };
-  $('#badge-dossier').textContent = 'mode GitHub'; $('#badge-dossier').className = 'badge ok';
-  backendGitHub.onFusion = async (f) => {
-    // le push a fusionné avec une version distante : l'affichage se réaligne sur le cache (ou s'y fusionne s'il a des modifications en cours)
-    if (etat.dirty.rules || etat.dirty.data) { const g = coffre.fusionner({ rules: etat.rules, data: etat.data }, backendGitHub.cache); etat.rules = g.rules; etat.data = g.data; marquer('rules'); marquer('data'); }
-    else { etat.rules = backendGitHub.cache.rules; etat.data = backendGitHub.cache.data; }
-    for (const nom of ['rules', 'data']) etat.charge[nom] = backendGitHub.cache[nom].meta.ecrit_le;
-    recategoriser(); toutRendre(); if (etat.dirty.rules || etat.dirty.data) await store.enregistrer({ silencieux: true });
-    toast(`Version de ${f.aad.machine || '?'} fusionnée : ${f.bilan.autre_seul || 0} opération(s), ${f.bilan.regles_autre || 0} règle(s) reprises`, 'ok');
-  };
-  montrerConnecte(); rendreSync();
-}
 $('#gh-phrase').oninput = e => { const f = chiffre.force(e.target.value); $('#gh-force').textContent = ['vide', 'faible', 'moyenne', 'bonne', 'solide'][f]; $('#gh-force').className = 'badge ' + (f >= 3 ? 'ok' : f === 2 ? 'warn' : 'bad'); };
 function lireFormulaireGitHub() {
   const d = github.lireDepot($('#gh-depot').value); if (!d) throw chiffre.erreur('FORMAT', 'Dépôt attendu sous la forme proprietaire/depot');
   const token = $('#gh-token').value.trim() || (ghPrefs.lire() || {}).token || '';
   if (!token) throw chiffre.erreur('TOKEN', 'Token GitHub manquant');
   const souvenir = $('#gh-souvenir').checked, code = souvenir ? chiffre.verifierCode($('#gh-code').value) : null;
-  return { cfg: { owner: d.owner, repo: d.repo, branche: ($('#gh-branche').value.trim() || 'main'), token }, phrase: $('#gh-phrase').value, souvenir, code };
+  const nomMachine = ($('#gh-machine').value || '').trim().toUpperCase().slice(0, 12) || machine;
+  return { cfg: { owner: d.owner, repo: d.repo, branche: ($('#gh-branche').value.trim() || 'main'), token }, phrase: $('#gh-phrase').value, souvenir, code, machine: nomMachine };
 }
-// connecte ; migration = pousser rules/data affichés comme premier contenu (sinon on part de ce qu'il y a sur GitHub, ou de fichiers vides)
-async function connecterGitHub({ migration } = {}) {
+// ouvre l'application une fois cfg et clé en place : lit GitHub (ou le cache), charge, affiche
+async function ouvrirApp() {
+  montrerApp(true); majBoutons();
+  try { const r = await backendGitHub.tirer(); if (r.absent && !backendGitHub.kdf) { deconnecterUI('Le fichier chiffré a disparu du dépôt : reconnecte-toi avec la phrase pour le recréer'); return false; } }
+  catch (e) { if (e.code === 'PHRASE') await idb.set('cle.protegee', null); deconnecterUI(e.code === 'PHRASE' ? 'La phrase de passe a changé sur un autre appareil : saisis la phrase actuelle' : e.message); return false; }
+  await store.charger();
+  backendGitHub.majSync(backendGitHub.enAttente ? 'attente' : 'synchronise');
+  return true;
+}
+async function connecterGitHub() {
   let f; try { f = lireFormulaireGitHub(); } catch (e) { $('#gh-msg').textContent = e.message; return; }
-  const bouton = migration ? $('#gh-migrer') : $('#gh-connecter'); bouton.disabled = true; $('#gh-msg').textContent = 'Connexion…';
+  const bouton = $('#gh-connecter'); bouton.disabled = true; $('#gh-msg').textContent = 'Connexion…';
   try {
     const depot = await github.verifierDepot(f.cfg);
-    if (!depot.prive) throw chiffre.erreur('DEPOT', `${depot.nom} est public : le dépôt doit être privé (même si le contenu est chiffré). Rends-le privé dans Settings → Danger zone, puis réessaie.`);
+    if (!depot.prive) throw chiffre.erreur('DEPOT', `${depot.nom} est public : le dépôt doit être privé. Rends-le privé dans Settings → Danger zone, puis réessaie.`);
     const lu = await github.lire(f.cfg);
     backendGitHub.cfg = f.cfg; backendGitHub.cache = { rules: null, data: null }; backendGitHub.sha = null; backendGitHub.seq = 0; backendGitHub.aad = null;
     let brute = null;
@@ -1770,28 +1581,22 @@ async function connecterGitHub({ migration } = {}) {
       if (!f.phrase) throw chiffre.erreur('PHRASE', 'Choisis une phrase de passe : aucun fichier chiffré n\'existe encore sur GitHub');
       const sel = chiffre.sel(); brute = await chiffre.deriverBrute(f.phrase, sel); backendGitHub.cle = await chiffre.importer(brute); backendGitHub.kdf = { sel, iter: chiffre.ITERATIONS };
     } else {
-      if (migration) throw chiffre.erreur('DEPOT', 'Un fichier chiffré existe déjà sur GitHub : connecte-toi normalement (il sera fusionné avec le dossier si tu utilises ensuite « Fusionner les JSON d\'un autre poste »)');
       if (!f.phrase) throw chiffre.erreur('PHRASE', 'Saisis la phrase de passe');
       const env = JSON.parse(lu.texte); chiffre.verifierEnveloppe(env);
       brute = await chiffre.deriverBrute(f.phrase, env.kdf.sel, env.kdf.iter); backendGitHub.cle = await chiffre.importer(brute);
       await backendGitHub.installer(env, lu.sha); await backendGitHub.garderLocal(env, lu.sha);
     }
+    machine = f.machine; localStorage.setItem('budget.machine', machine);
     ghPrefs.ecrire({ owner: f.cfg.owner, repo: f.cfg.repo, branche: f.cfg.branche, token: f.souvenir ? f.cfg.token : null, souvenir: f.souvenir });
     await memoriserCle(f.souvenir ? brute : null, f.code); brute = null;
-    localStorage.setItem('budget.mode', 'github');
-    const aMigrer = migration ? { rules: etat.rules, data: etat.data } : null;
-    basculerGitHub();
-    if (aMigrer) { for (const nom of ['rules', 'data']) { aMigrer[nom].meta = modele.meta(machine); await store.ecrire(nom, aMigrer[nom]); } await backendGitHub.envoyerMaintenant(); if (backendGitHub.sync === 'erreur') throw chiffre.erreur('HTTP', backendGitHub.detail); }
-    await store.charger({ silencieux: true });
-    if (lu.absent && !aMigrer) backendGitHub.envoyerMaintenant();
-    backendGitHub.majSync(backendGitHub.enAttente ? 'attente' : 'synchronise');
-    toast(aMigrer ? 'Dossier migré : le fichier chiffré est sur GitHub' : (lu.absent ? 'Connecté : fichier chiffré créé sur GitHub' : 'Connecté à GitHub'), 'ok');
+    $('#gh-phrase').value = ''; $('#gh-token').value = ''; $('#gh-code').value = ''; $('#gh-msg').textContent = '';
+    if (await ouvrirApp()) { if (lu.absent) backendGitHub.envoyerMaintenant(); toast(lu.absent ? 'Connecté : fichier chiffré créé sur GitHub' : 'Connecté', 'ok'); }
   } catch (e) {
-    revenirDisque(); montrerFormulaireGitHub(e.message);
+    deconnecterUI(e.message);
   } finally { bouton.disabled = false; majBoutons(); }
 }
 $('#gh-connecter').onclick = () => connecterGitHub();
-// ouverture par le code : libère la clé mémorisée, puis même parcours qu'un redémarrage connecté. 5 codes faux → clé oubliée, phrase requise.
+// ouverture par le code : libère la clé mémorisée. 5 codes faux → clé oubliée, phrase requise.
 const MAX_ESSAIS_CODE = 5;
 async function ouvrirParCode() {
   const prefs = ghPrefs.lire(), protegee = await idb.get('cle.protegee');
@@ -1807,68 +1612,53 @@ async function ouvrirParCode() {
     }
     await idb.set('cle.essais', 0);
     backendGitHub.cfg = { owner: prefs.owner, repo: prefs.repo, branche: prefs.branche || 'main', token: prefs.token }; backendGitHub.cle = cle;
-    basculerGitHub(); majBoutons();
-    try { const r = await backendGitHub.tirer(); if (r.absent) { revenirDisque(); montrerFormulaireGitHub('Le fichier chiffré a disparu du dépôt : reconnecte-toi avec la phrase pour le recréer'); return; } }
-    catch (e) { if (e.code === 'PHRASE') await idb.set('cle.protegee', null); revenirDisque(); montrerFormulaireGitHub(e.code === 'PHRASE' ? 'La phrase de passe ne déchiffre plus le fichier (changée sur un autre appareil ?) : saisis la phrase actuelle' : e.message); return; }
-    await store.charger({ silencieux: true });
-    backendGitHub.majSync(backendGitHub.enAttente ? 'attente' : 'synchronise');
+    await ouvrirApp();
   } catch (e) { montrerCode(e.message); }
   finally { $('#gh-ouvrir-btn').disabled = false; }
 }
 $('#gh-ouvrir-btn').onclick = () => ouvrirParCode();
 $('#gh-ouvrir-code').onkeydown = e => { if (e.key === 'Enter') ouvrirParCode(); };
-$('#gh-ouvrir-phrase').onclick = async () => { await idb.set('cle.protegee', null); montrerFormulaireGitHub('Saisis la phrase de passe (et un nouveau code si tu veux que cet appareil s\'en souvienne)'); };
-$('#gh-migrer').onclick = () => { if (confirm('Copier les fichiers du dossier dans le fichier chiffré sur GitHub, puis passer cette page en mode GitHub ?')) connecterGitHub({ migration: true }); };
+$('#gh-ouvrir-phrase').onclick = async () => { await idb.set('cle.protegee', null); montrerFormulaireGitHub('Saisis la phrase de passe (et un nouveau code pour que cet appareil s\'en souvienne)'); };
 $('#gh-phrase-changer').onclick = async () => {
   if (!backendGitHub.pret()) return;
-  const p1 = prompt('Nouvelle phrase de passe (4-5 mots). Pense à exporter les JSON avant, par sécurité.'); if (!p1) return;
+  const p1 = prompt('Nouvelle phrase de passe (4-5 mots). Exporte les JSON avant, par sécurité.'); if (!p1) return;
   const p2 = prompt('Confirme la nouvelle phrase'); if (p1 !== p2) { toast('Les deux phrases diffèrent', 'bad'); return; }
   let code = null;
   if ((ghPrefs.lire() || {}).souvenir !== false) { code = prompt('Code à 4-8 chiffres pour se souvenir de la nouvelle clé sur cet appareil (vide = ne pas se souvenir)'); try { code = code ? chiffre.verifierCode(code) : null; } catch (e) { toast(e.message, 'bad'); return; } }
-  if (etat.dirty.rules || etat.dirty.data) await store.enregistrer({ silencieux: true });
+  if (etat.dirty.rules || etat.dirty.data) await store.enregistrer();
   await backendGitHub.changerPhrase(p1, code);
-  toast(backendGitHub.sync === 'synchronise' ? 'Phrase changée : fichier rechiffré sur GitHub. Saisis-la sur tes autres appareils.' : 'Phrase changée ici ; l\'envoi vers GitHub est en attente', backendGitHub.sync === 'synchronise' ? 'ok' : 'warn');
+  toast(backendGitHub.sync === 'synchronise' ? 'Phrase changée : fichier rechiffré. Saisis-la sur tes autres appareils.' : 'Phrase changée ici ; envoi en attente', backendGitHub.sync === 'synchronise' ? 'ok' : 'warn');
 };
 $('#gh-deconnecter').onclick = async () => {
   if (!confirm('Oublier le token, la clé et la copie locale sur cet appareil ? Les données restent sur GitHub.')) return;
   await backendGitHub.envoyerMaintenant();
-  ghPrefs.ecrire(null); localStorage.removeItem('budget.mode'); await idb.set('cle.protegee', null); await idb.set('enveloppe', null); await idb.set('enveloppe.sha', null);
+  ghPrefs.ecrire(null); await idb.set('cle.protegee', null); await idb.set('enveloppe', null); await idb.set('enveloppe.sha', null); await idb.set('enveloppe.attente', null);
   location.reload();
 };
 (async function demarrage() {
   const prefs = ghPrefs.lire();
-  if (prefs) { $('#gh-depot').value = `${prefs.owner}/${prefs.repo}`; $('#gh-branche').value = prefs.branche || 'main'; $('#gh-souvenir').checked = prefs.souvenir !== false; }
-  if (localStorage.getItem('budget.mode') === 'github' && prefs) {
-    const protegee = await idb.get('cle.protegee');
-    if (!prefs.token || !protegee) { montrerFormulaireGitHub(prefs.token ? 'Saisis la phrase de passe pour ouvrir le fichier chiffré' : 'Saisis le token et la phrase de passe'); return; }
-    montrerCode();
-    return;
-  }
-  if (!etat.fsapi) return;
-  const h = await idb.get('handle'); if (!h) return;
-  const perm = await h.queryPermission({ mode: 'readwrite' });
-  if (perm === 'granted') await ouvrir(h); else { $('#btn-reautoriser').classList.remove('hidden'); $('#btn-reautoriser').textContent = `Réautoriser l'accès à « ${h.name} »`; }
+  $('#gh-machine').value = machine;
+  if (prefs) { $('#gh-depot').value = `${prefs.owner}/${prefs.repo}`; $('#gh-branche').value = prefs.branche || 'main'; $('#gh-souvenir').checked = prefs.souvenir !== false; $('#gh-code-label').classList.toggle('hidden', prefs.souvenir === false); }
+  const protegee = prefs && prefs.token ? await idb.get('cle.protegee') : null;
+  if (protegee) montrerCode(); else montrerFormulaireGitHub(prefs && prefs.token ? 'Saisis la phrase de passe' : '');
 })();
 
 $('#btn-export').onclick = () => {
-  if (!etat.rules) { etat.rules = modele.rulesDefaut(machine); etat.data = modele.dataDefaut(machine); }
-  for (const nom of ['rules', 'data']) { const o = JSON.parse(JSON.stringify(etat[nom])); o.meta = modele.meta(machine); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([serial.stringify(modele.pourEcriture(nom, o))], { type: 'application/json' })); a.download = FICHIERS[nom]; a.click(); URL.revokeObjectURL(a.href); }
-  toast('Fichiers exportés : range-les dans le dépôt');
+  if (!etat.rules) return;
+  for (const nom of ['rules', 'data']) { const o = JSON.parse(JSON.stringify(etat[nom])); o.meta = modele.meta(machine); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([serial.stringify(modele.pourEcriture(nom, o))], { type: 'application/json' })); a.download = nom + '.json'; a.click(); URL.revokeObjectURL(a.href); }
+  toast('Exportés en clair : à garder hors du dépôt');
 };
 $('#in-json').onchange = async e => {
+  if (!etat.rules) return;
   for (const f of e.target.files) {
     const nom = f.name === 'rules.json' ? 'rules' : f.name === 'data.json' ? 'data' : null;
     if (!nom) { toast(`${f.name} : attendu rules.json ou data.json`, 'bad'); continue; }
-    const text = await f.text();
-    if (serial.aConflit(text)) { toast(`${f.name} : marqueurs de conflit Git, non chargé`, 'bad'); continue; }
-    let obj; try { obj = JSON.parse(text); } catch { toast(`${f.name} : JSON invalide`, 'bad'); continue; }
+    let obj; try { obj = JSON.parse(await f.text()); } catch { toast(`${f.name} : JSON invalide`, 'bad'); continue; }
     const err = modele.valider(nom, obj); if (err) { toast(err, 'bad'); continue; }
-    etat[nom] = obj; etat.charge[nom] = obj.meta.ecrit_le; etat.dirty[nom] = false; toast(`${f.name} chargé`, 'ok');
+    etat[nom] = obj; marquer(nom); toast(`${f.name} chargé`, 'ok');
   }
-  if (!etat.rules) etat.rules = modele.rulesDefaut(machine);
-  if (!etat.data) etat.data = modele.dataDefaut(machine);
   modele.migrer(etat.rules, etat.data); recategoriser();
-  e.target.value = ''; toutRendre();
+  e.target.value = ''; await sauver();
 };
 
 // ---------- import CSV
@@ -1878,7 +1668,7 @@ const drop = $('#drop');
 drop.addEventListener('drop', e => importerFichiers([...e.dataTransfer.files]));
 $('#in-csv').onchange = e => { const files = [...e.target.files]; e.target.value = ''; importerFichiers(files); };
 async function importerFichiers(files) {
-  if (!etat.data) { if (etat.fsapi) { toast('Ouvre d\'abord le dossier du dépôt', 'bad'); return; } etat.rules = modele.rulesDefaut(machine); etat.data = modele.dataDefaut(machine); }
+  if (!etat.data) { toast('Non connecté', 'bad'); return; }
   const resultats = [];
   for (const f of files) {
     if (!/\.csv$/i.test(f.name)) { resultats.push({ fichier: f.name, erreurs: ['pas un .csv'], lues: 0, ops: [], comptes: {} }); continue; }
@@ -1906,20 +1696,18 @@ function rendreImport(res, n) {
 // ---------- rendu : état, opérations
 function rendreEtat() {
   const kv = [];
-  for (const nom of ['rules', 'data']) { const o = etat[nom]; kv.push(`<span class="muted">${FICHIERS[nom]}</span><span>${o ? `écrit par <b>${esc(o.meta.machine || '?')}</b> le ${fmtDate(o.meta.ecrit_le)} (app ${esc(o.meta.app || '?')})` : 'non chargé'}${etat.dirty[nom] ? ' <span class="badge warn">modifié ici</span>' : ''}</span>`); }
   if (etat.data) {
     const n = etat.data.operations.length, dates = etat.data.operations.map(o => o.date_op).sort();
     const av = etat.data.operations.filter(o => o.statut === 'a_valider').length;
     kv.push(`<span class="muted">opérations</span><span>${n}${n ? ` du ${dates[0]} au ${dates[n - 1]}` : ''}${av ? ` — <b>${av}</b> à valider` : ''}</span>`);
-    kv.push(`<span class="muted">règles</span><span>${etat.rules.rules.filter(r => r.source === 'user').length} apprise(s), ${etat.rules.rules.filter(r => r.source === 'seed').length} d'amorçage, ${etat.rules.appariements.length} appariement(s)</span>`);
+    kv.push(`<span class="muted">règles</span><span>${etat.rules.rules.filter(r => r.source === 'user').length} apprise(s), ${etat.rules.appariements.length} appariement(s)</span>`);
     $('#nav-n').textContent = av; $('#nav-n').classList.toggle('hidden', !av);
     const s = etat.data.soldes || {};
     kv.push(`<span class="muted">soldes (dernier CSV)</span><span>${['perso', 'pro'].map(c => s[c] ? `${c} ${fmtE(s[c].montant)} au ${s[c].date}` : `${c} —`).join(' · ')}</span>`);
   }
   $('#etat-fichiers').innerHTML = kv.join('');
-  $('#badge-dirty').classList.toggle('hidden', !(etat.dirty.rules || etat.dirty.data));
 }
-function majBoutons() { const p = etat.backend.pret(); $('#btn-verifier').disabled = !p; $('#btn-enregistrer').disabled = !p || !(etat.dirty.rules || etat.dirty.data); $('#btn-verifier').textContent = etat.backend === backendGitHub ? 'Vérifier GitHub' : 'Vérifier le disque'; $('#gh-migrer').disabled = !(etat.backend === backendDisque && etat.data); rendreSync(); }
+function majBoutons() { $('#btn-verifier').disabled = !backendGitHub.pret(); rendreSync(); }
 function catHtml(o) {
   if (o.categorie) return `<span class="cat" title="${esc(libelleCat(o.categorie))}">${esc(o.categorie)}</span>${o.poche ? ` <span class="badge gris">${esc(o.poche)}</span>` : ''}`;
   if (o.propositions.length) return `<span class="cat prop" title="${esc(libelleCat(o.propositions[0]))}">${esc(o.propositions[0])} ?</span>`;
@@ -1988,7 +1776,7 @@ function brancherEditeur(root) {
 
 // ---------- file de validation
 function rendreValidation() {
-  if (!etat.data) { $('#val-liste').innerHTML = '<p class="muted">Ouvre le dossier et importe des CSV.</p>'; return; }
+  if (!etat.data) { $('#val-liste').innerHTML = '<p class="muted">Importe des CSV.</p>'; return; }
   const f = engine.file(etat.data);
   const total = f.sans.length + f.avec.length + f.credits.length;
   $('#val-resume').textContent = total ? `${total} ligne(s) à traiter` : 'rien à valider';
@@ -2109,7 +1897,7 @@ let moisBord = null;
 function pct(n) { return n === null || n === undefined ? '—' : n.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %'; }
 function ecartTd(e, epargne) { if (e === null) return '<td class="num muted">—</td>'; const mauvais = epargne ? e < 0 : e > 0; return `<td class="num ${mauvais ? 'neg' : 'pos'}">${e > 0 ? '+' : ''}${util.montantFr(e)} €</td>`; }
 function rendreBord() {
-  if (!etat.data) { for (const id of ['#b-synthese', '#b-pro', '#b-treso', '#b-abos-alertes']) $(id).innerHTML = '<p class="muted">Ouvre le dossier et importe des CSV.</p>'; return; }
+  if (!etat.data) { for (const id of ['#b-synthese', '#b-pro', '#b-treso', '#b-abos-alertes']) $(id).innerHTML = '<p class="muted">Importe des CSV.</p>'; return; }
   const mois = stats.mois(etat.data), moisP = bord.moisCompte(etat.data, 'perso'); const sel = $('#b-mois');
   if (!moisBord || !mois.includes(moisBord)) moisBord = moisP[moisP.length - 1] || mois[mois.length - 1] || null;
   sel.innerHTML = mois.slice().reverse().map(m => `<option${m === moisBord ? ' selected' : ''}>${m}</option>`).join('') || '<option>—</option>';
@@ -2189,7 +1977,7 @@ $('#b-prov-ok').onclick = async () => {
 // ---------- légende
 (function () {
   const html = Object.entries(FAMILLES).map(([f, nom]) => { const codes = CATALOGUE.filter(c => c[0].split('.')[0] === f); return `<p style="margin:4px 0"><span class="cat">${f}</span> <b>${esc(nom)}</b>${codes.length > 1 || codes[0][0] !== f ? ' — ' + codes.map(c => `<span class="cat" title="${esc(c[1])}">${c[0].includes('.') ? c[0].split('.')[1] : c[0]}</span> ${esc(c[1])}`).join(' · ') : ''}</p>`; }).join('');
-  for (const id of ['#legende-1', '#legende-2']) { const e = $(id); if (e) e.innerHTML = html; }
+  $('#legende-1').innerHTML = html;
 })();
 
 // ---------- navigation, tests
