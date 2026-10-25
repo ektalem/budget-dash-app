@@ -154,6 +154,15 @@ input,select,textarea{max-width:100%}
       <h2 style="margin:0" title="Chaque correction crée une règle pour les prochaines lignes du même marchand">À valider</h2>
       <span class="small muted" id="val-resume"></span>
     </div>
+    <div id="val-lot" class="row hidden" style="position:sticky;top:44px;z-index:4;margin-top:10px;padding:8px;background:var(--accbg);border-radius:8px;align-items:center">
+      <b><span id="lot-n">0</span> cochée(s)</b>
+      <select id="lot-cat"></select>
+      <select id="lot-ent" class="hidden"></select>
+      <select id="lot-poche"></select>
+      <label class="small"><input type="checkbox" id="lot-regle" checked> règle par libellé</label>
+      <button class="b primary small" id="lot-ok">Appliquer</button>
+      <button class="b small" id="lot-annuler">Annuler</button>
+    </div>
     <div id="val-liste" style="margin-top:10px"></div>
   </div>
 </section>
@@ -286,7 +295,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.7.0-minimal';
+const APP_VERSION = '0.7.1';
 const SCHEMA = 1;
 
 const util = {
@@ -1364,7 +1373,7 @@ const idb = {
 const UA = navigator.userAgent || '';
 let machine = localStorage.getItem('budget.machine') || (/iPhone|iPad/.test(UA) ? 'IPHONE' : /Macintosh/.test(UA) ? 'MAC' : /Android/.test(UA) ? 'ANDROID' : 'PC');
 
-const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null };
+const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null, selection: new Set() };
 
 function marquer(nom) { etat.dirty[nom] = true; }
 function toutRendre() { rendreEtat(); rendreOps(); rendreValidation(); rendreRegles(); rendreMensuel(); rendreBord(); majBoutons(); }
@@ -1780,13 +1789,17 @@ function rendreValidation() {
   const f = engine.file(etat.data);
   const total = f.sans.length + f.avec.length + f.credits.length;
   $('#val-resume').textContent = total ? `${total} ligne(s) à traiter` : 'rien à valider';
-  const ligneHtml = o => `<tr class="clic" data-id="${o.id}"><td>${o.date_op}</td><td>${o.compte}</td><td>${esc(o.libelle)}</td><td>${catHtml(o)}${o.note ? `<br><span class="small muted">${esc(o.note)}</span>` : ''}</td><td class="num ${o.montant < 0 ? 'neg' : 'pos'}">${util.montantFr(o.montant)}</td><td><button class="b small v-ok" ${o.propositions.length ? '' : 'disabled'}>Valider</button></td></tr>${etat.editionId === o.id ? `<tr><td colspan="6">${editeurHtml(o)}</td></tr>` : ''}`;
-  const bloc = (titre, liste) => liste.length ? `<p class="grp">${titre} (${liste.length})</p><table><tbody>${liste.sort((a, b) => a.date_op.localeCompare(b.date_op)).map(ligneHtml).join('')}</tbody></table>` : '';
+  for (const id of [...etat.selection]) if (!etat.data.operations.some(o => o.id === id && o.statut !== 'valide')) etat.selection.delete(id);
+  const ligneHtml = o => `<tr class="clic" data-id="${o.id}"><td><input type="checkbox" class="v-sel" data-id="${o.id}"${etat.selection.has(o.id) ? ' checked' : ''}></td><td>${o.date_op}</td><td>${o.compte}</td><td>${esc(o.libelle)}</td><td>${catHtml(o)}${o.note ? `<br><span class="small muted">${esc(o.note)}</span>` : ''}</td><td class="num ${o.montant < 0 ? 'neg' : 'pos'}">${util.montantFr(o.montant)}</td><td><button class="b small v-ok" ${o.propositions.length ? '' : 'disabled'}>Valider</button></td></tr>${etat.editionId === o.id ? `<tr><td colspan="7">${editeurHtml(o)}</td></tr>` : ''}`;
+  const bloc = (titre, liste) => liste.length ? `<p class="grp"><input type="checkbox" class="v-tous" data-ids="${liste.map(o => o.id).join(',')}"${liste.every(o => etat.selection.has(o.id)) ? ' checked' : ''} title="tout cocher"> ${titre} (${liste.length})</p><table><tbody>${liste.sort((a, b) => a.date_op.localeCompare(b.date_op)).map(ligneHtml).join('')}</tbody></table>` : '';
   const aff = stats.aAffecter(etat.data, etat.rules), ctrl = stats.controle(etat.data, etat.rules);
   const extra = (aff.length ? `<p class="grp">4. Virements vers livrets à affecter (${aff.length})</p><p class="small muted">→ onglet Mensuel</p>` : '') + (ctrl.alertes.length ? `<p class="grp">5. Poches au-delà du solde</p>${ctrl.alertes.map(a => `<p class="small" style="color:var(--bad)">${esc(a)}</p>`).join('')}` : '');
   $('#val-liste').innerHTML = (total ? bloc('1. Sans catégorie : choisis', f.sans) + bloc('2. Proposition à confirmer', f.avec) + bloc('3. Crédits de particuliers sur le pro', f.credits) : '<p class="test-ok">Toutes les lignes sont catégorisées.</p>') + extra;
+  rendreLot();
   const root = $('#val-liste');
   root.querySelectorAll('tr.clic').forEach(tr => tr.onclick = () => { etat.editionId = etat.editionId === tr.dataset.id ? null : tr.dataset.id; rendreValidation(); });
+  root.querySelectorAll('.v-sel').forEach(c => { c.onclick = e => e.stopPropagation(); c.onchange = () => { c.checked ? etat.selection.add(c.dataset.id) : etat.selection.delete(c.dataset.id); rendreValidation(); }; });
+  root.querySelectorAll('.v-tous').forEach(c => c.onchange = () => { for (const id of c.dataset.ids.split(',')) c.checked ? etat.selection.add(id) : etat.selection.delete(id); rendreValidation(); });
   root.querySelectorAll('.v-ok').forEach(b => b.onclick = async (e) => {
     e.stopPropagation();
     const o = etat.data.operations.find(x => x.id === b.closest('tr').dataset.id);
@@ -1796,6 +1809,31 @@ function rendreValidation() {
   });
   brancherEditeur(root);
 }
+// barre d'action : attribuer d'un coup une catégorie (et entité, poche) à toutes les lignes cochées ; une règle « ce libellé » par ligne, sauf si décoché
+function rendreLot() {
+  const n = etat.selection.size, bar = $('#val-lot');
+  bar.classList.toggle('hidden', !n); if (!n) return;
+  const ops = etat.data.operations.filter(o => etat.selection.has(o.id));
+  const pro = ops.some(o => o.compte === 'pro'), perso = ops.some(o => o.compte === 'perso');
+  const faux = { compte: pro && !perso ? 'pro' : 'perso', propositions: [] };
+  const cat = $('#lot-cat'), ent = $('#lot-ent'), poche = $('#lot-poche');
+  const catAvant = cat.value;
+  cat.innerHTML = '<option value="">catégorie…</option>' + optionsCat(faux, catAvant);
+  cat.value = catAvant;
+  ent.classList.toggle('hidden', !pro); if (pro) ent.innerHTML = '<option value="">entité : ventilée</option>' + ENTITES.map(e => `<option value="${e}">${e}</option>`).join('');
+  poche.innerHTML = '<option value="">poche : —</option>' + etat.rules.poches.map(p => `<option value="${p.tag}">${p.tag}</option>`).join('');
+  $('#lot-n').textContent = n;
+}
+$('#lot-ok').onclick = async () => {
+  const categorie = $('#lot-cat').value; if (!categorie) { toast('Choisis une catégorie', 'bad'); return; }
+  const ops = etat.data.operations.filter(o => etat.selection.has(o.id));
+  const entite = $('#lot-ent').classList.contains('hidden') ? '' : $('#lot-ent').value, poche = $('#lot-poche').value, creerRegle = $('#lot-regle').checked;
+  let regles = 0;
+  for (const o of ops) { const r = engine.corriger(etat.data, etat.rules, machine, o, { categorie, entite: o.compte === 'pro' ? entite : undefined, poche, etendre: 'exact', montant: /MACSF/.test(o.cle), creerRegle }); if (r) regles++; }
+  etat.selection.clear(); etat.editionId = null; marquer('data'); marquer('rules'); recategoriser();
+  toast(`${ops.length} ligne(s) → ${categorie}${creerRegle ? `, ${regles} règle(s)` : ''}`, 'ok'); await sauver();
+};
+$('#lot-annuler').onclick = () => { etat.selection.clear(); rendreValidation(); };
 
 // ---------- règles
 function rendreRegles() {
