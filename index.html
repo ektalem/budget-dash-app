@@ -24,8 +24,8 @@ section.screen{display:none}section.screen.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px}
 .card h2{font-size:15px;margin:0 0 10px;font-weight:600}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-button.b{font:inherit;padding:7px 14px;border:1px solid var(--line);background:var(--card);border-radius:6px;cursor:pointer}
-button.b:hover{border-color:#999}
+button.b,label.b{font:inherit;padding:7px 14px;border:1px solid var(--line);background:var(--card);border-radius:6px;cursor:pointer;display:inline-block;line-height:1.5;color:var(--ink)}
+button.b:hover,label.b:hover{border-color:#999}
 button.b.primary{background:var(--acc);color:#fff;border-color:var(--acc)}
 button.b.small{padding:3px 9px;font-size:13px}
 button.b:disabled{opacity:.5;cursor:default}
@@ -54,6 +54,35 @@ input[type=text],input[type=number],select{font:inherit;padding:6px 8px;border:1
 .cat.vide{background:#fbe7e5;color:var(--bad)}
 .cat.prop{background:#fbefd9;color:var(--warn)}
 .grp{margin:14px 0 6px;font-weight:600;font-size:14px}
+input,select,textarea{max-width:100%}
+/* Téléphone et petit écran */
+@media (max-width:700px){
+  html,body{overflow-x:hidden}
+  header{flex-wrap:wrap;gap:6px 8px;padding:10px 12px}
+  header h1{flex:1 1 100%;font-size:16px}
+  header .badge{font-size:11px;padding:2px 7px}
+  header #version{flex:1 1 100%;margin-left:0;font-size:11px}
+  nav{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px;gap:2px}
+  nav button{padding:6px 2px;font-size:12.5px;line-height:1.25;text-align:center;white-space:normal}
+  nav button .n{margin-left:2px}
+  main{padding:10px}
+  .card{padding:12px;border-radius:8px;margin-bottom:10px;overflow-x:auto}
+  .card>p:first-of-type{margin-top:0}
+  .row{gap:8px}
+  .row>label:has(br){flex:1 1 100%}
+  .row>label:has(br)>input:not(.hidden):not([type=checkbox]),.row>label:has(br)>select{width:100%!important;display:block;margin-top:2px}
+  input[type=text],input[type=number],input[type=password],input:not([type]),select{font-size:16px;padding:8px 10px}
+  button.b,label.b{padding:9px 12px}
+  button.b.small{padding:6px 10px}
+  table{font-size:13px}
+  th,td{padding:6px 6px}
+  .kv{grid-template-columns:1fr;gap:2px}
+  .kv>:nth-child(odd){color:var(--muted);font-size:12px;margin-top:6px}
+  .drop{padding:22px 12px}
+  .edit{padding:10px}
+  #toasts{left:12px;right:12px;bottom:12px}
+  .toast{max-width:none}
+}
 </style>
 </head>
 <body>
@@ -312,7 +341,7 @@ input[type=text],input[type=number],select{font:inherit;padding:6px 8px;border:1
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.6.0-etape6';
+const APP_VERSION = '0.6.1-mobile';
 const SCHEMA = 1;
 const FICHIERS = { rules: 'rules.json', data: 'data.json' };
 
