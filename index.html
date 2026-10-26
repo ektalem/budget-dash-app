@@ -20,9 +20,36 @@ header h1{font-size:17px;font-weight:600;margin:0}
 .badge.warn{background:#fbefd9;color:var(--warn)}
 .badge.gris{background:#eeede8;color:var(--muted)}
 nav{display:flex;gap:4px;padding:8px 20px;background:var(--card);border-bottom:1px solid var(--line)}
-nav button{background:none;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit;color:var(--muted)}
+nav button{background:none;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font:inherit;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
 nav button.on{background:var(--accbg);color:var(--acc);font-weight:600}
+nav button .ico{font-size:16px}
 nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warn);color:#fff;font-size:11px;margin-left:4px}
+/* Accueil, boîte de réception (v0.9) */
+.chiffres{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.chiffre{background:#fafaf7;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.chiffre .lbl{font-size:12px;color:var(--muted)}
+.chiffre .big{font-size:24px;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums;line-height:1.2;margin:2px 0}
+.chiffre .delta{font-size:12px;color:var(--muted)}.delta.pos{color:var(--ok)}.delta.neg{color:var(--bad)}
+.todo{list-style:none;margin:0;padding:0}
+.todo li{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.todo li:last-child{border-bottom:none}.todo li:hover{background:#fafaf7}
+.todo .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--accbg);flex:none}
+.todo .txt{flex:1}.todo .txt small{display:block;color:var(--muted)}
+.todo .chev{color:var(--muted)}
+.mois-nav{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:12px}
+.mois-nav b{min-width:140px;text-align:center;font-size:16px}
+.ligne-op{display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--line)}
+.ligne-op .ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none;color:#fff}
+.ligne-op .txt{flex:1;min-width:0}.ligne-op .txt small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ligne-op .mt{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.boite-card{max-width:560px;margin:0 auto}
+.boite-card .nom{font-size:20px;font-weight:700;margin:4px 0}
+.boite-card .prop{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;margin:8px 0}
+.boite-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+.boite-actions button{font:inherit;font-size:15px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.boite-actions button.oui{background:var(--ok);color:#fff;border-color:var(--ok);font-weight:600}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:6px 0 12px}.progress i{display:block;height:100%;background:var(--acc)}
+.menu{list-style:none;margin:0;padding:0}.menu li{padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between}.menu li:hover{background:#fafaf7}
 main{max-width:1200px;margin:0 auto;padding:20px}
 section.screen{display:none}section.screen.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px}
@@ -86,10 +113,14 @@ input,select,textarea{max-width:100%}
   header h1{flex:1 1 100%;font-size:16px}
   header .badge{font-size:11px;padding:2px 7px}
   header #version{flex:1 1 100%;margin-left:0;font-size:11px}
-  nav{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(6,1fr);padding:6px 6px;gap:2px}
-  nav button{padding:6px 2px;font-size:12.5px;line-height:1.25;text-align:center;white-space:normal}
-  nav button .n{margin-left:2px}
-  main{padding:10px}
+  nav{position:fixed;bottom:0;left:0;right:0;z-index:5;display:grid;grid-template-columns:repeat(5,1fr);padding:4px 4px calc(4px + env(safe-area-inset-bottom));gap:2px;border-top:1px solid var(--line);border-bottom:none}
+  nav button{padding:4px 2px;font-size:11px;line-height:1.2;text-align:center;white-space:normal;flex-direction:column;gap:1px;border-radius:8px}
+  nav button .ico{font-size:20px}
+  nav button .n{margin-left:2px;position:absolute;transform:translate(14px,-22px)}
+  nav button{position:relative}
+  main{padding:10px 10px 76px}
+  .chiffres{grid-template-columns:1fr 1fr 1fr;gap:6px}.chiffre{padding:8px}.chiffre .big{font-size:18px}
+  .boite-actions button{padding:12px 6px}
   .card{padding:12px;border-radius:8px;margin-bottom:10px;overflow-x:auto}
   .card>p:first-of-type{margin-top:0}
   .row{gap:8px}
@@ -116,12 +147,11 @@ input,select,textarea{max-width:100%}
   <span class="muted small" style="margin-left:auto" id="version"></span>
 </header>
 <nav id="nav">
-  <button data-screen="import" class="on">Import</button>
-  <button data-screen="validation">Valider<span class="n hidden" id="nav-n"></span></button>
-  <button data-screen="mensuel">Mois</button>
-  <button data-screen="bord">Bilan</button>
-  <button data-screen="graphes">Graphes</button>
-  <button data-screen="avance">Avancé</button>
+  <button data-screen="accueil" class="on"><span class="ico">🏠</span><span>Accueil</span><span class="n hidden" id="nav-n"></span></button>
+  <button data-screen="import"><span class="ico">📋</span><span>Opérations</span></button>
+  <button data-screen="graphes"><span class="ico">📊</span><span>Analyse</span></button>
+  <button data-screen="mensuel"><span class="ico">🏦</span><span>Comptes</span></button>
+  <button data-screen="plus"><span class="ico">⋯</span><span>Plus</span></button>
 </nav>
 <main>
 
@@ -153,7 +183,46 @@ input,select,textarea{max-width:100%}
   </div>
 </section>
 
-<section class="screen on" id="screen-import">
+<section class="screen on" id="screen-accueil">
+  <div class="mois-nav"><button class="b small" id="ac-prec">‹</button><b id="ac-mois">—</b><button class="b small" id="ac-suiv">›</button></div>
+  <div class="card">
+    <div class="chiffres" id="ac-chiffres"></div>
+  </div>
+  <div class="card">
+    <h2>À faire</h2>
+    <ul class="todo" id="ac-todo"></ul>
+  </div>
+  <div class="card">
+    <h2>Pro ce mois</h2>
+    <div class="chiffres" id="ac-pro"></div>
+  </div>
+  <div class="card">
+    <h2>6 derniers mois</h2>
+    <div class="chart" id="c-accueil" style="height:220px"></div>
+  </div>
+</section>
+
+<section class="screen" id="screen-boite">
+  <div class="boite-card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Boîte de réception <span class="muted small" id="bo-compteur"></span></h2><button class="b small" id="bo-retour">Accueil</button></div>
+    <div class="progress"><i id="bo-progress" style="width:0"></i></div>
+    <div id="bo-contenu"></div>
+  </div>
+</section>
+
+<section class="screen" id="screen-plus">
+  <div class="card">
+    <h2>Plus</h2>
+    <ul class="menu">
+      <li data-go="bord"><span>📑 Bilan (tableaux)</span><span class="muted">›</span></li>
+      <li data-go="validation"><span>☑️ Valider en liste <span class="muted small">(ancienne file)</span></span><span class="muted">›</span></li>
+      <li data-go="avance"><span>⚙️ Réglages : règles, catégories, titulaire, compte GitHub, sauvegarde</span><span class="muted">›</span></li>
+    </ul>
+    <p class="small muted" style="margin:10px 0 0">Refonte en cours (étape 1 sur 4) : Opérations, Analyse et Comptes seront refaits aux étapes suivantes ; en attendant, ce sont les écrans existants.</p>
+  </div>
+</section>
+
+<section class="screen" id="screen-import">
   <div class="card">
     <div class="drop" id="drop">Glisser ici les CSV Boursorama (perso, pro, livrets, PEA)<br><span class="small">ou <label style="text-decoration:underline;cursor:pointer">choisir<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label></span></div>
     <div id="import-resultat" style="margin-top:12px"></div>
@@ -380,7 +449,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.9.0-etape1';
 const SCHEMA = 1;
 
 const util = {
@@ -430,6 +499,13 @@ const norm = {
     if (ma.length < 2 || mb.length < 2) return false;
     const [court, long] = ma.length <= mb.length ? [ma, mb] : [mb, ma];
     return court.every(t => long.includes(t));
+  },
+  // Nom lisible d'une opération (v0.9) : libellé suggéré par Bourso, sinon la clé sans son préfixe technique, en capitales initiales
+  nomLisible(op) {
+    const sug = (op.libelle_suggere || '').trim();
+    if (sug && !/^\d+$/.test(sug)) return sug;
+    let s = String(op.cle || op.libelle || '').replace(/^(PRLV SEPA|VIR SEPA|VIR INST|TDF EMIS VIA CB|VIR|SAISIE)\s+/i, '').replace(/\s+(FR|DE|IT|ES)\d{2,}.*$/, '');
+    return s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, a, c) => a + c.toUpperCase()).trim() || op.libelle;
   }
 };
 
@@ -581,7 +657,11 @@ const SPHERES = ['perso', 'epargne', 'pro'];
 // familles: { FAM: libelle }, fusions: [{ de, vers, date }] }. Les codes livrés ne sont jamais supprimés : un code fusionné ou masqué
 // reste connu (libellé, légende) mais disparaît des sélecteurs ; une fusion recatégorise toutes les lignes, règles, tiers et cibles.
 const catalogue = {
-  defaut() { return { ajouts: [], libelles: {}, masques: [], familles: {}, fusions: [] }; },
+  // Catalogue réduit (v0.9, décision de Maxime) : ces codes restent appliqués par les règles mais n'apparaissent plus dans les sélecteurs, sauf réactivation
+  MASQUES_DEFAUT: ['REV.REMPLA', 'MOB.ENTRETIEN', 'MOB.MICRO', 'MOB.TC', 'MOB.TAXI', 'PROJ.DONATION', 'PROJ.LOCATIF', 'HB.AUTRE', 'INT.LIVRET',
+    'HON.CB', 'ENT.FIFPL', 'ENT.RBT', 'RETRO.FAMI', 'FRAIS.DOCTOLIB', 'FRAIS.MOBILE', 'FRAIS.IA', 'FRAIS.ORDRE', 'DEPL.ENTRETIEN', 'COT.INDU', 'PREL.REMPLA', 'HE.AVANCES',
+    'EPC.VERS', 'EPC.RETRAIT', 'EPC.INTERETS', 'EPC.FRAIS', 'EPC.TITRES', 'EPC.AUTRE'],
+  defaut() { return { ajouts: [], libelles: {}, masques: catalogue.MASQUES_DEFAUT.slice(), familles: {}, fusions: [], simplifie: true }; },
   conf(rules) { if (!rules.catalogue) rules.catalogue = catalogue.defaut(); const c = rules.catalogue; for (const [k, v] of Object.entries(catalogue.defaut())) if (c[k] === undefined) c[k] = v; return c; },
   codeValide(code) { return /^[A-Z][A-Z0-9-]*(\.[A-Z][A-Z0-9-]*)?$/.test(code); },
   // recalcule CATALOGUE, CAT et FAMILLES en place (les références existantes restent valables)
@@ -742,6 +822,7 @@ const modele = {
     if (!rules.config.provisions) { rules.config.provisions = { URSSAF: null, CARPIMKO: null, CFE: null, IR: null }; modif = true; }
     if (!rules.abonnements) { rules.abonnements = []; modif = true; }
     if (!rules.catalogue) { rules.catalogue = catalogue.defaut(); modif = true; }
+    if (!rules.catalogue.simplifie) { const c = catalogue.conf(rules); for (const m of catalogue.MASQUES_DEFAUT) if (!c.masques.includes(m)) c.masques.push(m); c.simplifie = true; modif = true; }
     catalogue.appliquer(rules);
     if (!data.soldes) { data.soldes = {}; modif = true; }
     for (const p of rules.poches) { if (!p.ajustements) { p.ajustements = []; modif = true; } if (p.actif === undefined) { p.actif = true; modif = true; } }
@@ -1059,17 +1140,37 @@ const engine = {
     const p = rules.poches.find(p => p.tag.includes(tag) || (tag === 'PROJET' && p.tag === 'PROJET-A-DEUX') || (tag === 'LOCATIF' && p.tag === 'APPORT-LOCATIF'));
     return p ? p.tag : null;
   },
+  // Confiance (v0.9) : une proposition déjà validée 3 fois pour la même clé marchand et la même catégorie passe en auto sans redemander
+  SEUIL_CONFIANCE: 3,
+  confiance(data) { const c = {}; for (const o of data.operations) if (o.statut === 'valide' && o.categorie) { const k = o.cle + '|' + o.categorie; c[k] = (c[k] || 0) + 1; } return c; },
+  confirmer(op, res, ctx) {
+    if (res.statut !== 'a_valider' || !res.propositions || !res.propositions[0]) return res;
+    const cat = res.propositions[0];
+    if ((ctx.confiance[op.cle + '|' + cat] || 0) < engine.SEUIL_CONFIANCE) return res;
+    return { categorie: cat, interne: INTERNE_CATS.test(cat), statut: 'auto', regle_id: 'confiance', note: null };
+  },
   // Exécution complète : recalcule toutes les lignes non validées, recompte les hits
   run(data, rules) {
     for (const r of rules.rules) r.hits = 0;
     const paires = engine.apparier(data.operations, rules);
-    const ctx = { rules, titulaire: rules.config.titulaire && norm.mots(rules.config.titulaire).length >= 2 ? rules.config.titulaire : null, paires };
+    const ctx = { rules, titulaire: rules.config.titulaire && norm.mots(rules.config.titulaire).length >= 2 ? rules.config.titulaire : null, paires, confiance: engine.confiance(data) };
     for (const op of data.operations) {
       if (op.statut === 'valide') { if (op.regle_id && op.regle_id.startsWith('r-')) { const r = rules.rules.find(x => x.id === op.regle_id); if (r) r.hits++; } continue; }
       if (!paires.has(op.id)) op.apparie = null;
-      engine.appliquer(op, engine.resoudre(op, ctx));
+      engine.appliquer(op, engine.confirmer(op, engine.resoudre(op, ctx), ctx));
     }
     return data.operations.filter(o => o.statut === 'a_valider').length;
+  },
+  // Boîte de réception (v0.9) : lignes à valider regroupées par clé marchand + proposition, les plus nombreuses et récentes d'abord
+  groupes(data) {
+    const m = new Map();
+    for (const o of data.operations) {
+      if (o.statut !== 'a_valider') continue;
+      const k = o.cle + '|' + o.compte + '|' + (o.propositions[0] || '');
+      if (!m.has(k)) m.set(k, { cle: k, nom: norm.nomLisible(o), compte: o.compte, proposition: o.propositions[0] || null, propositions: o.propositions, note: o.note, ops: [] });
+      m.get(k).ops.push(o);
+    }
+    return [...m.values()].map(g => { g.ops.sort((a, b) => b.date_op.localeCompare(a.date_op)); g.total = bord.r2(g.ops.reduce((s, o) => s + o.montant, 0)); return g; }).sort((a, b) => b.ops.length - a.ops.length || b.ops[0].date_op.localeCompare(a.ops[0].date_op));
   },
   // Correction manuelle (§8.2)
   corriger(data, rules, machine, op, choix) {
@@ -1708,12 +1809,17 @@ const tests = {
       ['patrimoine : solde CSV de fin de mois par livret, report des mois sans ligne, saisie prioritaire, AV = cumul des versements à défaut de saisie', () => { const j = jeu([ligne('2026-09-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `5${NB}800,00`), ligne('2026-09-25', 'VIR Virement depuis BoursoBank', '200,00', 'Livret A', '', `6${NB}000,00`), ligne('2026-11-03', 'VIR Virement depuis BoursoBank', '100,00', 'Livret A', '', `6${NB}100,00`), ligne('2026-09-15', 'PRLV SEPA LINXEA VIE', '-150,00', P), ligne('2026-10-15', 'PRLV SEPA LINXEA VIE', '-150,00', P)]); j.d.mensuel['2026-10'] = { soldes: { LEP: 4000 } }; const p = stats.patrimoine(j.d); const i = m => p.mois.indexOf(m); return p.mois.join() === '2026-09,2026-10,2026-11' && p.series.LA[i('2026-09')] === 6000 && p.series.LA[i('2026-10')] === 6000 && p.sources.LA[i('2026-10')] === 'report' && p.series.LA[i('2026-11')] === 6100 && p.series.LEP[i('2026-09')] === null && p.series.LEP[i('2026-10')] === 4000 && p.sources.LEP[i('2026-10')] === 'saisie' && p.series.LEP[i('2026-11')] === 4000 && p.series.AV[i('2026-09')] === 150 && p.series.AV[i('2026-10')] === 300 && p.sources.AV[i('2026-10')] === 'versements' && p.dernier.LA.montant === 6100 && p.dernier.LA.source === 'csv' && p.dernier.CRYPTO === null; }],
       ['poches : le solde du livret vient du CSV du livret quand il existe (plus de saisie nécessaire)', () => { const j = jeu([ligne('2026-10-08', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-08', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `2${NB}500,00`)]); j.par('VIR Virement vers LIVRET A').poche = 'PRECAUTION'; const c = stats.controle(j.d, j.r); return c.soldes.LA === 2500 && c.alertes.length === 0; }],
       ['catalogue : ajout d\'une sous-catégorie dans une famille existante et d\'une famille nouvelle, visible dans les sélecteurs, légende', () => { const r = modele.rulesDefaut('T'); catalogue.ajouter(r, 'lois.sport', 'Sport', 'perso'); catalogue.ajouter(r, 'ANIM.VETO', 'Vétérinaire', 'perso', 'Animaux'); const ok = CAT['LOIS.SPORT'] && CAT['LOIS.SPORT'].libelle === 'Sport' && catalogue.visibles('perso').includes('LOIS.SPORT') && FAMILLES.ANIM === 'Animaux' && CAT['ANIM.VETO'].sphere === 'perso' && libelleCat('ANIM.VETO') === 'Animaux › Vétérinaire'; let refuse = false; try { catalogue.ajouter(r, 'LOIS.SPORT', 'x', 'perso'); } catch (e) { refuse = true; } let refuse2 = false; try { catalogue.ajouter(r, 'lois sport', 'x', 'perso'); } catch (e) { refuse2 = true; } catalogue.appliquer(modele.rulesDefaut('T')); return ok && refuse && refuse2 && !CAT['LOIS.SPORT']; }],
-      ['catalogue : renommage (libellé seulement, code inchangé), masquage, retour au libellé livré', () => { const r = modele.rulesDefaut('T'); catalogue.renommer(r, 'ALIM.CAFE', 'Cafés et boulangeries'); const ok1 = CAT['ALIM.CAFE'].libelle === 'Cafés et boulangeries' && r.catalogue.libelles['ALIM.CAFE'] === 'Cafés et boulangeries'; catalogue.renommer(r, 'ALIM.CAFE', 'Cafés, boulangeries'); const ok2 = r.catalogue.libelles['ALIM.CAFE'] === undefined; catalogue.masquer(r, 'MOB.MICRO'); const ok3 = CAT['MOB.MICRO'].masque && !catalogue.visibles('perso').includes('MOB.MICRO') && catalogue.visibles('perso').includes('MOB.TC'); catalogue.masquer(r, 'MOB.MICRO', false); const ok4 = !CAT['MOB.MICRO'].masque; catalogue.appliquer(modele.rulesDefaut('T')); return ok1 && ok2 && ok3 && ok4; }],
+      ['catalogue : renommage (libellé seulement, code inchangé), masquage, retour au libellé livré', () => { const r = modele.rulesDefaut('T'); catalogue.renommer(r, 'ALIM.CAFE', 'Cafés et boulangeries'); const ok1 = CAT['ALIM.CAFE'].libelle === 'Cafés et boulangeries' && r.catalogue.libelles['ALIM.CAFE'] === 'Cafés et boulangeries'; catalogue.renommer(r, 'ALIM.CAFE', 'Cafés, boulangeries'); const ok2 = r.catalogue.libelles['ALIM.CAFE'] === undefined; catalogue.masquer(r, 'MOB.MICRO'); const ok3 = CAT['MOB.MICRO'].masque && !catalogue.visibles('perso').includes('MOB.MICRO') && catalogue.visibles('perso').includes('MOB.CARBU'); catalogue.masquer(r, 'MOB.MICRO', false); const ok4 = !CAT['MOB.MICRO'].masque; catalogue.appliquer(modele.rulesDefaut('T')); return ok1 && ok2 && ok3 && ok4; }],
       ['catalogue : fusion ALIM.CAFE → ALIM.RESTO : lignes (validées comprises), règles, tiers, cibles basculés ; ancien code masqué ; journal', () => { const j = jeu([ligne('2026-10-01', 'CARTE 01/10/26 BOULANGERIE X CB*1', '-3,00', P), ligne('2026-10-02', 'CARTE 02/10/26 PANERA CB*1', '-12,00', P)]); engine.corriger(j.d, j.r, 'T', j.par('CARTE 01/10/26 BOULANGERIE X CB*1'), { categorie: 'ALIM.CAFE' }); j.r.config.budget_cible = { 'ALIM.CAFE': 40, 'ALIM.RESTO': 100 }; j.r.tiers['X Y'] = { categorie: 'ALIM.CAFE', entite: null, nature: null }; const n = catalogue.fusionner(j.r, j.d, 'ALIM.CAFE', 'ALIM.RESTO'); engine.run(j.d, j.r); const ok = n === 1 && j.d.operations.every(o => o.categorie === 'ALIM.RESTO') && j.r.rules.filter(x => x.categorie === 'ALIM.CAFE').length === 0 && j.r.tiers['X Y'].categorie === 'ALIM.RESTO' && j.r.config.budget_cible['ALIM.CAFE'] === undefined && j.r.config.budget_cible['ALIM.RESTO'] === 140 && CAT['ALIM.CAFE'].masque && j.r.catalogue.fusions.length === 1 && j.r.catalogue.fusions[0].de === 'ALIM.CAFE'; catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
       ['catalogue : fusion des rules.json de deux postes = union des ajouts, masques et fusions ; migration des anciens fichiers', () => { const a = modele.rulesDefaut('PC'), b = modele.rulesDefaut('MAC'); catalogue.ajouter(a, 'LOIS.SPORT', 'Sport', 'perso'); catalogue.ajouter(b, 'LOIS.JEUX', 'Jeux', 'perso'); catalogue.masquer(b, 'MOB.MICRO'); const f = modele.fusionnerRegles(a, b).rules; const ok = f.catalogue.ajouts.length === 2 && f.catalogue.masques.includes('MOB.MICRO') && CAT['LOIS.JEUX'] && CAT['LOIS.SPORT']; const r = modele.rulesDefaut('T'); delete r.catalogue; const m = modele.migrer(r, modele.dataDefaut('T')); catalogue.appliquer(modele.rulesDefaut('T')); return ok && m === true && r.catalogue && Array.isArray(r.catalogue.ajouts) && !CAT['LOIS.JEUX']; }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
+      // v0.9 étape 1
+      ['nom lisible : libellé suggéré d\'abord, sinon clé sans préfixe en capitales initiales', () => { const j = jeu([ligne('2026-10-05', 'CARTE 04/10/26 INTERM CALAO 2319 CB*1', '-10,00', P), ligne('2026-10-06', 'PRLV SEPA VIZCAYA SCI', '-980,00', P)]); const o = j.d.operations[0]; o.libelle_suggere = 'Intermarché'; return norm.nomLisible(o) === 'Intermarché' && norm.nomLisible(j.d.operations[1]) === 'Vizcaya Sci' && norm.nomLisible(Object.assign({}, o, { libelle_suggere: null })) === 'Interm Calao'; }],
+      ['confiance : une proposition validée 3 fois (ligne seule, sans règle) passe en auto ensuite, pas avant', () => { const L = (d) => ligne(d, 'CARTE 01/10/26 BOUTIQUE INCONNUE CB*1', '-9,00', P, 'Vêtements'); const j = jeu([L('2026-07-01'), L('2026-08-01'), L('2026-09-01'), L('2026-10-01')]); const ops = j.d.operations.slice().sort((a, b) => a.date_op.localeCompare(b.date_op)); const ok0 = ops.every(o => o.statut === 'a_valider'); for (const o of ops.slice(0, 2)) engine.corriger(j.d, j.r, 'T', o, { categorie: 'LOIS.SHOPPING', creerRegle: false }); engine.run(j.d, j.r); const ok1 = ops[2].statut === 'a_valider'; engine.corriger(j.d, j.r, 'T', ops[2], { categorie: 'LOIS.SHOPPING', creerRegle: false }); engine.run(j.d, j.r); return ok0 && ok1 && ops[3].statut === 'auto' && ops[3].categorie === 'LOIS.SHOPPING' && ops[3].regle_id === 'confiance'; }],
+      ['boîte : lignes à valider groupées par marchand + proposition, les plus nombreuses d\'abord, total par groupe', () => { const j = jeu([ligne('2026-10-01', 'CARTE 01/10/26 PING JI CB*1', '-10,00', P, 'Alimentation'), ligne('2026-10-08', 'CARTE 08/10/26 PING JI CB*1', '-12,00', P, 'Alimentation'), ligne('2026-10-03', 'VIR SEPA PAUL MARTIN', '-45,00', P)]); const g = engine.groupes(j.d); return g.length === 2 && g[0].ops.length === 2 && g[0].proposition === 'ALIM.COURSES' && g[0].total === -22 && g[0].nom === 'Ping Ji' && g[1].propositions[0] === 'LOIS.CADEAUX'; }],
+      ['catalogue réduit : masques par défaut sur un fichier neuf et à la migration d\'un ancien, règles toujours appliquées', () => { const r = modele.rulesDefaut('T'); const ok1 = r.catalogue.masques.includes('MOB.TC') && !catalogue.visibles('perso').includes('MOB.TC') && catalogue.visibles('perso').length <= 30; const r2 = modele.rulesDefaut('T'); r2.catalogue = { ajouts: [], libelles: {}, masques: [], familles: {}, fusions: [] }; const m = modele.migrer(r2, modele.dataDefaut('T')); const j = jeu([ligne('2026-10-01', 'CARTE 01/10/26 LIGNES D AZUR CB*1', '-1,50', P)]); catalogue.appliquer(modele.rulesDefaut('T')); return ok1 && m && r2.catalogue.simplifie && r2.catalogue.masques.includes('FRAIS.IA') && j.d.operations[0].categorie === 'MOB.TC'; }],
       ['graphes pro : évolution, catégories de sorties, sankey encaissements → rétrocessions / cotisations / versé au perso / reste', () => { const j = jeu([ligne('2026-10-06', 'VIR SEPA CPAM 061 NICE', '1000,00', B), ligne('2026-10-05', 'VIR SEPA ORPEA', '-200,00', B), ligne('2026-10-15', 'PRLV SEPA URSSAF PACA', '-150,00', B), ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-400,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '400,00', P)]); const ev = graphes.proMensuel(j.d, j.r, ['2026-10']); const c = graphes.proCategories(j.d, j.r, ['2026-10']); const s = graphes.sankeyPro(j.d, j.r, ['2026-10']); const vers = (n) => s.links.filter(l => s.nodes[l.target].name === n).reduce((a, l) => a + l.value, 0); return ev[0].enc === 1000 && ev[0].charges === 200 && ev[0].cot === 150 && ev[0].prel === 400 && c.total === 750 && c.familles[0].code === 'PREL' && s.totalEnc === 1000 && vers('RETRO') === 200 && vers('COT') === 150 && vers('PREL') === 400 && vers('Reste') === 250; }]
     ];
   },
@@ -1741,7 +1847,7 @@ let machine = localStorage.getItem('budget.machine') || (/iPhone|iPad/.test(UA) 
 const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null, selection: new Set() };
 
 function marquer(nom) { etat.dirty[nom] = true; }
-function toutRendre() { rendreEtat(); rendreOps(); rendreValidation(); rendreRegles(); rendreCategories(); rendreMensuel(); rendreBord(); rendreGraphes(); majBoutons(); }
+function toutRendre() { rendreEtat(); rendreAccueil(); rendreBoite(); rendreOps(); rendreValidation(); rendreRegles(); rendreCategories(); rendreMensuel(); rendreBord(); rendreGraphes(); majBoutons(); }
 
 // ---------- stockage : un seul fichier chiffré data/store.json.enc dans le dépôt privé, lu/écrit par l'API GitHub (PC, Mac, téléphone)
 const SYNC_DELAI = 3000, SYNC_RETENTATIVE = 30000;
@@ -1915,7 +2021,8 @@ const ghPrefs = {
   lire() { try { return JSON.parse(localStorage.getItem('budget.github') || 'null'); } catch { return null; } },
   ecrire(o) { if (o) localStorage.setItem('budget.github', JSON.stringify(o)); else localStorage.removeItem('budget.github'); }
 };
-function montrerEcran(nom) { document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nom)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; toutRendre(); }
+const NAV_PARENT = { boite: 'accueil', validation: 'plus', bord: 'plus', avance: 'plus' };
+function montrerEcran(nom) { const nav = NAV_PARENT[nom] || nom; document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nav)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; window.scrollTo(0, 0); toutRendre(); }
 // écran de connexion seul (nav et écrans masqués) ou application
 function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('hidden', !connecte)); }
 function montrerFormulaireGitHub(msg) { montrerApp(false); $('#gh-form').classList.remove('hidden'); $('#gh-ouvrir').classList.add('hidden'); $('#gh-msg').textContent = msg || ''; if (msg) $('#gh-phrase').focus(); }
@@ -2381,6 +2488,105 @@ $('#b-prov-ok').onclick = async () => {
   $('#b-prov-saisie').querySelectorAll('.b-prov').forEach(i => { const v = i.value.trim(); pv[i.dataset.k] = v === '' ? null : Number(v.replace(',', '.')); });
   etat.rules.config.provisions = pv; marquer('rules'); toast('Taux de provision enregistrés', 'ok'); await sauver();
 };
+
+// ---------- accueil et boîte de réception (v0.9 étape 1)
+const ICONES = { REV: '💶', FIX: '🏠', ABO: '🔁', ALIM: '🛒', MOB: '🚗', LOIS: '🎉', SANTE: '💊', PROJ: '🎯', HB: '↔️', INT: '🔄', EPG: '🌱', EPC: '🏦', HON: '🩺', ENT: '📥', RETRO: '🤝', FRAIS: '🧾', DEPL: '⛽', REPAS: '🍽️', COT: '🏛️', PREL: '💸', HE: '↔️', NC: '❔' };
+function icone(code) { return ICONES[String(code || 'NC').split('.')[0]] || '❔'; }
+function libelleCourt(code) { if (!code) return 'Non catégorisé'; const c = CAT[code]; const fam = FAMILLES[code.split('.')[0]]; return c ? (code.includes('.') && fam ? `${fam} › ${c.libelle}` : c.libelle) : code; }
+function moisLisible(m) { if (!m) return '—'; const d = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1)); const t = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }); return t.charAt(0).toUpperCase() + t.slice(1); }
+function deltaHtml(cur, prev, inverse) { if (prev === null || prev === undefined || cur === null || cur === undefined || prev === 0) return '<span class="delta">—</span>'; const d = cur - prev; if (Math.abs(d) < 0.005) return '<span class="delta">= mois précédent</span>'; const bon = inverse ? d < 0 : d > 0; return `<span class="delta ${bon ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${util.montantFr(Math.abs(d))} € vs mois précédent</span>`; }
+let acMois = null;
+function rendreAccueil() {
+  if (!etat.data) { $('#ac-chiffres').innerHTML = ''; $('#ac-todo').innerHTML = '<li><span class="txt">Connecte-toi, puis importe des CSV.</span></li>'; return; }
+  const mois = stats.mois(etat.data);
+  if (!acMois || !mois.includes(acMois)) acMois = mois[mois.length - 1] || null;
+  const i = mois.indexOf(acMois), prec = i > 0 ? mois[i - 1] : null;
+  $('#ac-mois').textContent = moisLisible(acMois); $('#ac-prec').disabled = i <= 0; $('#ac-suiv').disabled = i < 0 || i >= mois.length - 1;
+  if (!acMois) { $('#ac-chiffres').innerHTML = ''; $('#ac-todo').innerHTML = '<li><span class="txt">Importe des CSV pour commencer.</span></li>'; $('#ac-pro').innerHTML = ''; return; }
+  const p = bord.perso(etat.data, acMois), pp = prec ? bord.perso(etat.data, prec) : null;
+  const chiffre = (lbl, val, delta, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div>${delta}</div>`;
+  $('#ac-chiffres').innerHTML = chiffre('Revenus', fmtE(p.revenus), deltaHtml(p.revenus, pp && pp.revenus)) + chiffre('Dépenses', fmtE(p.depenses), deltaHtml(p.depenses, pp && pp.depenses, true)) + chiffre("Taux d'épargne", pct(p.taux), `<span class="delta">épargné ${fmtE(p.epargne)}</span>`);
+  // to-do
+  const items = [];
+  const nAv = etat.data.operations.filter(o => o.statut === 'a_valider').length;
+  if (nAv) items.push({ ico: '📬', titre: `${nAv} ligne${nAv > 1 ? 's' : ''} à confirmer`, sous: `${engine.groupes(etat.data).length} marchand(s), une question à la fois`, go: 'boite' });
+  const dernier = { perso: bord.moisCompte(etat.data, 'perso').pop(), pro: bord.moisCompte(etat.data, 'pro').pop() };
+  const auj = new Date().toISOString().slice(0, 7);
+  const retard = ['perso', 'pro'].filter(c => !dernier[c] || dernier[c] < auj);
+  if (retard.length) items.push({ ico: '⬇️', titre: `Importer les CSV ${retard.join(' et ')}`, sous: `dernier mois importé : ${retard.map(c => `${c} ${dernier[c] || 'jamais'}`).join(', ')}`, go: 'import' });
+  const aff = stats.aAffecter(etat.data, etat.rules).length;
+  if (aff) items.push({ ico: '🎯', titre: `${aff} virement${aff > 1 ? 's' : ''} vers un livret à affecter`, sous: 'précaution ou projet ?', go: 'mensuel' });
+  const sm = stats.mensuel(etat.data, acMois); const manque = [];
+  if (etat.data.operations.some(o => o.compte === 'pro' && util.mois(o.date_op) === acMois)) { if (sm.doctolib_nice === null || sm.doctolib_ehpad === null) manque.push('totaux Doctolib'); if (sm.especes === null) manque.push('espèces'); }
+  const patri = stats.patrimoine(etat.data); for (const k of ['AV', 'CRYPTO', 'PEA']) { const d = patri.dernier[k]; if (d && d.source === 'versements') manque.push('valorisation ' + SUPPORTS_LIBELLES[k].toLowerCase()); }
+  if (manque.length) items.push({ ico: '✍️', titre: `Saisies du mois : ${manque.join(', ')}`, sous: moisLisible(acMois), go: 'mensuel' });
+  const ab = bord.abonnements(etat.data, etat.rules); if (ab.alertes.length) items.push({ ico: '🔁', titre: `${ab.alertes.length} abonnement${ab.alertes.length > 1 ? 's' : ''} à regarder`, sous: ab.alertes.slice(0, 3).map(a => `${a.nom} : ${a.statut}`).join(' · '), go: 'bord' });
+  const ctrl = stats.controle(etat.data, etat.rules); if (ctrl.alertes.length) items.push({ ico: '⚠️', titre: 'Poches au-delà du solde', sous: ctrl.alertes[0], go: 'mensuel' });
+  $('#ac-todo').innerHTML = items.length ? items.map(t => `<li data-go="${t.go}"><span class="ico">${t.ico}</span><span class="txt">${esc(t.titre)}<small>${esc(t.sous)}</small></span><span class="chev">›</span></li>`).join('') : '<li><span class="ico">✅</span><span class="txt">Tout est à jour<small>rien à confirmer, rien à saisir</small></span></li>';
+  $('#ac-todo').querySelectorAll('li[data-go]').forEach(li => li.onclick = () => montrerEcran(li.dataset.go));
+  // pro
+  const pr = bord.pro(etat.data, etat.rules, acMois), t = bord.tresorerie(etat.data, etat.rules);
+  $('#ac-pro').innerHTML = chiffre('Encaissé', fmtE(pr.enc.total), `<span class="delta">versé au perso ${fmtE(pr.prel.total)}</span>`) + chiffre('Provision du mois', pr.provision.total === null ? '—' : fmtE(pr.provision.total), `<span class="delta">${pr.provision.total === null ? 'taux à saisir dans Bilan' : 'URSSAF, CARPIMKO, CFE, IR'}</span>`) + chiffre('Trésorerie libre pro', t.libre === null ? '—' : fmtE(t.libre), `<span class="delta">${t.solde ? 'solde ' + fmtE(t.solde.montant) + ' − provisions dues' : 'importe un CSV pro'}</span>`);
+  // mini graphe 6 mois
+  if (typeof Chart === 'function') {
+    const six = mois.slice(Math.max(0, i - 5), i + 1); const ev = graphes.persoMensuel(etat.data, six);
+    chart('c-accueil', { type: 'bar', data: { labels: six.map(m => m.slice(2).replace('-', '/')), datasets: [{ label: 'Revenus', data: ev.map(e => e.revenus), backgroundColor: '#1d7a4d' }, { label: 'Dépenses', data: ev.map(e => e.depenses), backgroundColor: '#b4342c' }, { label: 'Épargne', data: ev.map(e => e.epargne), backgroundColor: '#2b5db3' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v.toLocaleString('fr-FR') } } }, plugins: { legend: { position: 'bottom' }, tooltip: tipEuro }, onClick: (e, els) => { if (els.length) { acMois = six[els[0].index]; rendreAccueil(); } } } });
+  } else $('#c-accueil').innerHTML = '';
+}
+$('#ac-prec').onclick = () => { const m = stats.mois(etat.data), i = m.indexOf(acMois); if (i > 0) { acMois = m[i - 1]; rendreAccueil(); } };
+$('#ac-suiv').onclick = () => { const m = stats.mois(etat.data), i = m.indexOf(acMois); if (i < m.length - 1) { acMois = m[i + 1]; rendreAccueil(); } };
+document.querySelectorAll('#screen-plus .menu li').forEach(li => li.onclick = () => montrerEcran(li.dataset.go));
+
+// Boîte de réception : un groupe (marchand + proposition) à la fois, trois réponses
+const boite = { ignores: new Set(), autre: false, total: 0 };
+function rendreBoite() {
+  if (!$('#screen-boite').classList.contains('on') || !etat.data) return;
+  const groupes = engine.groupes(etat.data).filter(g => !boite.ignores.has(g.cle));
+  const total = engine.groupes(etat.data).length; if (!boite.total || total > boite.total) boite.total = total;
+  const fait = boite.total - groupes.length;
+  $('#bo-compteur').textContent = total ? `${fait + 1} / ${boite.total}` : ''; $('#bo-progress').style.width = boite.total ? `${Math.round(fait / boite.total * 100)}%` : '0';
+  const z = $('#bo-contenu');
+  if (!groupes.length) { boite.total = 0; z.innerHTML = `<div class="card" style="text-align:center"><p style="font-size:32px;margin:6px 0">✅</p><p><b>${total ? 'Le reste a été ignoré pour cette fois.' : 'Boîte vide.'}</b></p><p class="small muted">${total ? 'Les lignes ignorées reviendront à la prochaine ouverture.' : 'Toutes les lignes sont catégorisées.'}</p><button class="b primary" id="bo-fin">Retour à l'accueil</button></div>`; $('#bo-fin').onclick = () => montrerEcran('accueil'); return; }
+  const g = groupes[0], o = g.ops[0], fam = g.proposition ? g.proposition.split('.')[0] : 'NC';
+  const lignes = g.ops.slice(0, 6).map(x => `<div class="ligne-op" style="padding:4px 0"><span class="txt small muted">${x.date_op}${x.annotation.tiers ? ' · ' + esc(x.annotation.tiers) : ''}</span><span class="mt ${x.montant < 0 ? 'neg' : 'pos'}" style="color:${x.montant < 0 ? 'var(--bad)' : 'var(--ok)'}">${util.montantFr(x.montant)} €</span></div>`).join('') + (g.ops.length > 6 ? `<p class="small muted">… et ${g.ops.length - 6} autre(s)</p>` : '');
+  z.innerHTML = `<div class="card">
+    <div class="ligne-op" style="border:none;padding:0"><span class="ico" style="background:${couleur(fam)}">${icone(fam)}</span><span class="txt"><div class="nom">${esc(g.nom)}</div><small>${g.compte === 'perso' ? 'compte perso' : g.compte === 'pro' ? 'compte pro' : SUPPORTS_LIBELLES[g.compte] || g.compte} · ${g.ops.length > 1 ? g.ops.length + ' lignes' : o.date_op} · <span style="font-family:ui-monospace,monospace">${esc(o.cle)}</span></small></span><span class="mt" style="font-size:20px;color:${g.total < 0 ? 'var(--bad)' : 'var(--ok)'}">${util.montantFr(g.total)} €</span></div>
+    ${g.ops.length > 1 ? `<div style="margin-top:8px">${lignes}</div>` : ''}
+    ${g.note ? `<p class="small" style="color:var(--warn);margin:8px 0 0">${esc(g.note)}</p>` : ''}
+    ${g.proposition ? `<div class="prop" style="background:${couleur(fam)}22;color:${couleur(fam)}">${icone(fam)} ${esc(libelleCourt(g.proposition))}${g.propositions.length > 1 ? `<span class="small muted" style="font-weight:400"> · ou ${g.propositions.slice(1, 3).map(c => esc(libelleCourt(c))).join(', ')}</span>` : ''}</div>` : '<p class="small muted" style="margin:8px 0">Aucune proposition : choisis une catégorie.</p>'}
+    <div id="bo-autre" class="${boite.autre || !g.proposition ? '' : 'hidden'}">
+      <div class="row" style="margin-top:6px">
+        <label>Catégorie <select id="bo-cat">${optionsCat(o, g.proposition || '')}</select></label>
+        ${g.compte === 'pro' ? `<label>Entité <select id="bo-ent"><option value="">ventilée Nice/EHPAD</option>${ENTITES.map(e => `<option${(o.entite || engine.entiteDefaut(g.proposition || 'FRAIS.AUTRE')) === e ? ' selected' : ''}>${e}</option>`).join('')}</select></label>` : ''}
+        <label>Poche <select id="bo-poche"><option value="">—</option>${etat.rules.poches.filter(p => p.actif !== false).map(p => `<option${o.poche === p.tag ? ' selected' : ''}>${p.tag}</option>`).join('')}</select></label>
+      </div>
+      <div class="row small" style="margin-top:4px">
+        <label><input type="radio" name="bo-et" value="exact" checked> ce marchand</label>
+        <label><input type="radio" name="bo-et" value="famille"> toute la famille « ${esc(engine.motPrincipal(o.cle))} »</label>
+        ${norm.tiers(o.libelle) ? `<label><input type="radio" name="bo-et" value="tiers"> tous les virements de « ${esc(norm.tiers(o.libelle))} »</label>` : ''}
+        <label><input type="checkbox" id="bo-sansregle"> juste ces lignes, pas de règle</label>
+      </div>
+    </div>
+    <div class="boite-actions">
+      <button class="oui" id="bo-oui">${g.proposition && !boite.autre ? 'Oui' : 'Valider'}</button>
+      <button id="bo-autre-btn">${boite.autre || !g.proposition ? 'Proposition' : 'Autre…'}</button>
+      <button id="bo-ignorer">Ignorer</button>
+    </div>
+  </div>`;
+  const appliquer = async (categorie, opts) => {
+    let regles = 0;
+    for (const x of g.ops) { const r = engine.corriger(etat.data, etat.rules, machine, x, Object.assign({ categorie, etendre: 'exact', montant: /MACSF/.test(x.cle) }, opts)); if (r) regles++; }
+    marquer('data'); marquer('rules'); boite.autre = false; recategoriser();
+    toast(`${g.ops.length} ligne(s) → ${libelleCourt(categorie)}${regles ? ' · règle créée' : ''}`, 'ok'); await sauver();
+  };
+  $('#bo-oui').onclick = async () => {
+    if (boite.autre || !g.proposition) { const cat = $('#bo-cat').value; if (!cat) { toast('Choisis une catégorie', 'bad'); return; } await appliquer(cat, { entite: $('#bo-ent') ? $('#bo-ent').value : undefined, poche: $('#bo-poche').value, etendre: document.querySelector('input[name="bo-et"]:checked').value, creerRegle: !$('#bo-sansregle').checked }); }
+    else await appliquer(g.proposition, { entite: g.compte === 'pro' ? (o.entite ?? engine.entiteDefaut(g.proposition) ?? '') : undefined, poche: o.poche, etendre: (g.compte === 'pro' && o.montant > 0 && norm.tiers(o.libelle)) ? 'tiers' : 'exact' });
+  };
+  $('#bo-autre-btn').onclick = () => { if (!g.proposition) return; boite.autre = !boite.autre; rendreBoite(); };
+  $('#bo-ignorer').onclick = () => { boite.ignores.add(g.cle); boite.autre = false; rendreBoite(); };
+}
+$('#bo-retour').onclick = () => montrerEcran('accueil');
 
 // ---------- graphes (Chart.js + d3-sankey, chargés en différé depuis un CDN ; Méthodo v3 §9.2)
 const PALETTE = ['#2b5db3', '#1d7a4d', '#a46a0b', '#b4342c', '#6b4fa0', '#0f8b8d', '#c2558b', '#5f6f2f', '#8a5a2b', '#3a7bd5', '#7a7a7a', '#d08a2e', '#2e8b57', '#b86b00'];
