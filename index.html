@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Budget</title>
+<!-- Graphiques (onglet Graphes) : chargés depuis un CDN, la page ne contient aucune donnée ; le reste fonctionne sans -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js" defer></script>
 <style>
 :root{--bg:#f6f5f1;--card:#fff;--ink:#1f1f1d;--muted:#6b6a64;--line:#dcdad2;--ok:#1d7a4d;--warn:#a46a0b;--bad:#b4342c;--acc:#2b5db3;--accbg:#e6eefb}
 *{box-sizing:border-box}
@@ -55,6 +59,26 @@ input[type=text],input[type=number],select{font:inherit;padding:6px 8px;border:1
 .cat.prop{background:#fbefd9;color:var(--warn)}
 .grp{margin:14px 0 6px;font-weight:600;font-size:14px}
 input,select,textarea{max-width:100%}
+/* Graphes */
+.sub{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.sub button{font:inherit;padding:6px 14px;border:1px solid var(--line);background:var(--card);border-radius:20px;cursor:pointer;color:var(--muted)}
+.sub button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.gr-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.gr-grid .card{margin:0}
+.gr-grid .card.large{grid-column:1 / -1}
+.chart{position:relative;height:300px}
+.chart.haut{height:360px}
+.sankey svg{width:100%;height:auto;display:block}
+.sankey .node rect{cursor:pointer;stroke:none}
+.sankey .node text{font-size:12px;fill:var(--ink);pointer-events:none}
+.sankey .link{fill:none;stroke:#9a9890;stroke-opacity:.28}
+.sankey .link:hover{stroke-opacity:.55}
+.legende{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin-top:6px}
+.legende span i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legende button{font:inherit;font-size:13px;background:none;border:none;padding:0;cursor:pointer;color:var(--ink)}
+.legende button:hover{text-decoration:underline}
+.puce{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+@media (max-width:900px){.gr-grid{grid-template-columns:1fr}}
 /* Téléphone et petit écran */
 @media (max-width:700px){
   html,body{overflow-x:hidden}
@@ -62,7 +86,7 @@ input,select,textarea{max-width:100%}
   header h1{flex:1 1 100%;font-size:16px}
   header .badge{font-size:11px;padding:2px 7px}
   header #version{flex:1 1 100%;margin-left:0;font-size:11px}
-  nav{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px;gap:2px}
+  nav{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(6,1fr);padding:6px 6px;gap:2px}
   nav button{padding:6px 2px;font-size:12.5px;line-height:1.25;text-align:center;white-space:normal}
   nav button .n{margin-left:2px}
   main{padding:10px}
@@ -96,6 +120,7 @@ input,select,textarea{max-width:100%}
   <button data-screen="validation">Valider<span class="n hidden" id="nav-n"></span></button>
   <button data-screen="mensuel">Mois</button>
   <button data-screen="bord">Bilan</button>
+  <button data-screen="graphes">Graphes</button>
   <button data-screen="avance">Avancé</button>
 </nav>
 <main>
@@ -130,7 +155,7 @@ input,select,textarea{max-width:100%}
 
 <section class="screen on" id="screen-import">
   <div class="card">
-    <div class="drop" id="drop">Glisser ici les CSV Boursorama (perso et/ou pro)<br><span class="small">ou <label style="text-decoration:underline;cursor:pointer">choisir<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label></span></div>
+    <div class="drop" id="drop">Glisser ici les CSV Boursorama (perso, pro, livrets, PEA)<br><span class="small">ou <label style="text-decoration:underline;cursor:pointer">choisir<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label></span></div>
     <div id="import-resultat" style="margin-top:12px"></div>
     <div class="kv" style="margin-top:8px" id="etat-fichiers"></div>
   </div>
@@ -138,7 +163,7 @@ input,select,textarea{max-width:100%}
     <div class="row" style="justify-content:space-between">
       <h2 style="margin:0" title="Clique sur une ligne pour la corriger">Opérations <span class="muted" id="ops-count"></span></h2>
       <div class="row">
-        <select id="f-compte"><option value="">perso + pro</option><option value="perso">perso</option><option value="pro">pro</option></select>
+        <select id="f-compte"><option value="">tous les comptes</option><option value="perso">perso</option><option value="pro">pro</option><option value="epargne">livrets, PEA</option></select>
         <select id="f-statut"><option value="">tous statuts</option><option value="a_valider">à valider</option><option value="auto">auto</option><option value="valide">validé</option></select>
         <input type="text" id="f-texte" placeholder="filtrer">
       </div>
@@ -178,12 +203,16 @@ input,select,textarea{max-width:100%}
       <label class="small muted">Facturé EHPAD <input type="number" step="0.01" id="m-ehpad" style="width:120px"></label>
       <label class="small muted">Espèces (pro) <input type="number" step="0.01" id="m-especes" style="width:120px"></label>
     </div>
-    <div class="row" style="margin-top:8px">
-      <label class="small muted">Livret A <input type="number" step="0.01" id="m-la" style="width:120px"></label>
-      <label class="small muted">LEP <input type="number" step="0.01" id="m-lep" style="width:120px"></label>
-      <label class="small muted">LDDS <input type="number" step="0.01" id="m-ldds" style="width:120px"></label>
+    <div class="row" style="margin-top:8px" title="Soldes de fin de mois. Inutile pour un livret dont le CSV est importé (le solde est lu dedans) ; pour le PEA, l'assurance-vie et la crypto : valorisation totale">
+      <label class="small muted">Livret A <input type="number" step="0.01" id="m-la" style="width:110px"></label>
+      <label class="small muted">LEP <input type="number" step="0.01" id="m-lep" style="width:110px"></label>
+      <label class="small muted">LDDS <input type="number" step="0.01" id="m-ldds" style="width:110px"></label>
+      <label class="small muted">PEA (valorisation) <input type="number" step="0.01" id="m-pea" style="width:110px"></label>
+      <label class="small muted">Assurance-vie <input type="number" step="0.01" id="m-av" style="width:110px"></label>
+      <label class="small muted">Crypto <input type="number" step="0.01" id="m-crypto" style="width:110px"></label>
       <button class="b primary" id="m-ok">Enregistrer</button>
     </div>
+    <p class="small muted" id="m-soldes-csv" style="margin:6px 0 0"></p>
     <div id="m-ventilation" style="margin-top:10px"></div>
     <div id="m-manuel" style="margin-top:8px"></div>
   </div>
@@ -241,11 +270,49 @@ input,select,textarea{max-width:100%}
   </div>
 </section>
 
+<section class="screen" id="screen-graphes">
+  <div class="row" style="justify-content:space-between;margin-bottom:12px">
+    <div class="sub" id="gr-onglets" style="margin:0">
+      <button data-gr="perso" class="on">Perso</button>
+      <button data-gr="pro">Pro</button>
+      <button data-gr="patrimoine">Patrimoine</button>
+    </div>
+    <div class="row" id="gr-periode">
+      <select id="gr-mode"><option value="glissant">12 derniers mois</option><option value="annee">Année</option><option value="mois">Mois</option></select>
+      <select id="gr-valeur" class="hidden"></select>
+    </div>
+  </div>
+  <div id="gr-indispo" class="block hidden"><h2>Graphiques indisponibles</h2><p class="small" style="margin:0">La bibliothèque de graphiques n'a pas pu être chargée (hors ligne ?). Les tableaux des autres onglets restent utilisables ; recharge la page une fois connecté.</p></div>
+  <div id="gr-perso" class="gr-grid">
+    <div class="card large"><h2 title="Revenus = REV ; dépenses hors épargne, interne et hors budget ; épargne = EPG ; taux = épargne ÷ revenus">Évolution mensuelle</h2><div class="chart" id="c-perso-evo"></div></div>
+    <div class="card"><h2 title="Clique sur une part pour voir les sous-catégories et les lignes">Dépenses par famille</h2><div class="chart" id="c-perso-fam"></div><div class="legende" id="l-perso-fam"></div></div>
+    <div class="card"><h2 id="t-perso-sous">Sous-catégories</h2><div class="chart" id="c-perso-sous"></div></div>
+    <div class="card large"><h2 title="Flux de la période : d'où vient l'argent, où il va ; clique sur un bloc pour voir les lignes">Flux (revenus → dépenses, épargne)</h2><div class="sankey" id="s-perso"></div></div>
+  </div>
+  <div id="gr-pro" class="gr-grid hidden">
+    <div class="card large"><h2 title="Encaissements HON + ENT ; charges RETRO FRAIS DEPL REPAS ; cotisations COT ; versé au perso PREL">Évolution mensuelle</h2><div class="chart" id="c-pro-evo"></div></div>
+    <div class="card"><h2 title="Encaissements ventilés Nice / EHPAD au prorata Doctolib, Rempla et Commun">Encaissements par entité</h2><div class="chart" id="c-pro-ent"></div></div>
+    <div class="card"><h2 title="Clique sur une part pour voir le détail">Sorties par famille</h2><div class="chart" id="c-pro-fam"></div><div class="legende" id="l-pro-fam"></div></div>
+    <div class="card large"><h2 id="t-pro-sous">Sous-catégories</h2><div class="chart" id="c-pro-sous"></div></div>
+    <div class="card large"><h2 title="D'où viennent les encaissements, où ils vont ; le reste = ce qui demeure sur le pro (provisions)">Flux (encaissements → charges, cotisations, versé au perso)</h2><div class="sankey" id="s-pro"></div></div>
+  </div>
+  <div id="gr-patrimoine" class="gr-grid hidden">
+    <div class="card large"><h2 title="Livret A, LEP, LDDS, PEA : solde de fin de mois lu dans leur CSV, ou saisi dans Mois ; assurance-vie et crypto : valorisation saisie dans Mois, à défaut cumul des versements">Patrimoine par support</h2><div class="chart haut" id="c-patri"></div></div>
+    <div class="card large"><h2>Dernier état connu</h2><div id="t-patri"></div></div>
+  </div>
+  <div class="card hidden" id="gr-detail-card" style="margin-top:16px">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0" id="gr-detail-titre">Détail</h2><div class="row"><button class="b small" id="gr-detail-cats" title="Renommer, ajouter, fusionner des catégories (Avancé)">Gérer les catégories</button><button class="b small" id="gr-detail-fermer">Fermer</button></div></div>
+    <p class="small muted" style="margin:6px 0">Clique sur une ligne pour la corriger : la nouvelle catégorie est prise en compte immédiatement dans les graphiques.</p>
+    <div style="overflow:auto"><table id="gr-detail"><thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Statut</th><th style="text-align:right">Montant</th></tr></thead><tbody></tbody></table></div>
+    <p class="muted small" id="gr-detail-more"></p>
+  </div>
+</section>
+
 <section class="screen" id="screen-avance">
   <div class="card">
     <h2>Paramètres</h2>
     <div class="row">
-      <label class="small muted" title="Pour reconnaître les virements à toi-même (Revolut…)">Nom du titulaire</label>
+      <label class="small muted" title="Pour reconnaître les virements à toi-même (Revolut, autre banque), quelle que soit l'écriture : M. NOM PRENOM, PRENOM NOM…">Nom du titulaire</label>
       <input type="text" id="cfg-titulaire" placeholder="PRENOM NOM" style="min-width:220px">
       <button class="b small" id="cfg-titulaire-ok">Enregistrer</button>
     </div>
@@ -266,6 +333,24 @@ input,select,textarea{max-width:100%}
   <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Historique des règles remplacées</summary>
     <div style="overflow:auto;margin-top:8px"><table id="historique"><thead><tr><th>Remplacée le</th><th>Id</th><th>Motif</th><th>Ancienne catégorie</th></tr></thead><tbody></tbody></table></div>
   </details>
+  <div class="card" id="card-categories">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0" title="Les codes livrés ne sont jamais supprimés : masqués, ils disparaissent des sélecteurs ; fusionnés, toutes leurs lignes passent dans la cible">Catégories <span class="muted" id="cat-count"></span></h2>
+      <div class="row"><select id="cat-sphere"><option value="">toutes</option><option value="perso">perso</option><option value="epargne">épargne</option><option value="pro">pro</option></select><input type="text" id="cat-filtre" placeholder="filtrer"><label class="small"><input type="checkbox" id="cat-masquees"> voir les masquées</label></div>
+    </div>
+    <div class="edit" style="margin-top:10px">
+      <div class="row">
+        <label>Nouveau code <input type="text" id="cat-new-code" placeholder="LOIS.SPORT" style="width:140px;text-transform:uppercase"></label>
+        <label>Libellé <input type="text" id="cat-new-lib" placeholder="Sport" style="width:180px"></label>
+        <label>Sphère <select id="cat-new-sphere"><option value="perso">perso</option><option value="epargne">épargne</option><option value="pro">pro</option></select></label>
+        <label>Famille (si nouvelle) <input type="text" id="cat-new-fam" placeholder="libellé de la famille" style="width:170px"></label>
+        <button class="b primary small" id="cat-new-ok">Ajouter</button>
+      </div>
+      <p class="small muted" style="margin:0">Code = FAMILLE.SOUS en majuscules (ou FAMILLE seule). Une famille existante (LOIS, FRAIS…) accueille le nouveau code dans ses totaux.</p>
+    </div>
+    <div style="overflow:auto;margin-top:8px"><table id="categories"><thead><tr><th>Famille</th><th>Code</th><th>Libellé</th><th>Sphère</th><th style="text-align:right">Lignes</th><th>Visible</th><th>Fusionner dans</th></tr></thead><tbody></tbody></table></div>
+    <details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">Journal des fusions</summary><div id="cat-fusions" class="small" style="margin-top:6px"></div></details>
+  </div>
   <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Légende des codes</summary><div id="legende-1" class="small" style="margin-top:8px"></div></details>
   <div class="card" id="gh-connecte">
     <h2>Compte</h2>
@@ -295,7 +380,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.7.1';
+const APP_VERSION = '0.8.0';
 const SCHEMA = 1;
 
 const util = {
@@ -326,15 +411,25 @@ const norm = {
     return s;
   },
   // Nom d'un particulier dans un virement : tokens écrits en majuscules (lettres, tirets) après VIR SEPA / VIR INST,
-  // sur le libellé brut (la casse du motif éventuel permet de s'arrêter)
+  // sur le libellé brut (la casse du motif éventuel permet de s'arrêter). Les civilités (M., MR, MME, MLLE…) sont ignorées.
+  CIVILITES: /^(M\.?|MR|MME|MLLE|MLE|MONSIEUR|MADAME|MADEMOISELLE|DR)$/,
   tiers(libelle) {
     const m = /^VIR (?:SEPA|INST) (.+)$/.exec(norm.stripAccents(String(libelle || '')).replace(/\s+/g, ' ').trim());
     if (!m) return null;
     const toks = m[1].split(' ');
     const nom = [];
-    for (const t of toks) { if (/^[A-Z][A-Z'-]*$/.test(t)) nom.push(t); else break; }
+    for (const t of toks) { if (!nom.length && norm.CIVILITES.test(t)) continue; if (/^[A-Z][A-Z'-]*$/.test(t)) nom.push(t); else break; }
     if (nom.length < 2 || nom.length > 4) return null;
     return nom.join(' ');
+  },
+  // Deux écritures du même nom ? Bourso écrit « M. BELKADI MAXIME JOSUE », « MR BELKADI MAXIME », « MAXIME BELKADI »…
+  // Vrai quand tous les mots du nom le plus court (au moins deux) se retrouvent dans l'autre, ordre et civilités ignorés.
+  mots(nom) { return norm.stripAccents(String(nom || '')).toUpperCase().split(/[\s,]+/).filter(t => t && !norm.CIVILITES.test(t)); },
+  memePersonne(a, b) {
+    const ma = norm.mots(a), mb = norm.mots(b);
+    if (ma.length < 2 || mb.length < 2) return false;
+    const [court, long] = ma.length <= mb.length ? [ma, mb] : [mb, ma];
+    return court.every(t => long.includes(t));
   }
 };
 
@@ -355,12 +450,20 @@ const csv = {
     return rows.filter(r => r.some(f => f.trim() !== ''));
   },
   montant(s) { const t = String(s).replace(/[\s  ]/g, '').replace(',', '.'); const n = Number(t); return Number.isFinite(n) && t !== '' ? n : null; },
+  // Compte d'une ligne d'après « Libellé Compte » : perso, pro, ou un compte d'épargne Bourso (LA, LEP, LDDS, PEA).
+  // Les libellés exacts des exports livrets ne sont pas connus : détection tolérante (Méthodo v3 §1.1, point à confirmer)
   compte(libelleCompte) {
     const l = norm.stripAccents(String(libelleCompte)).toUpperCase();
-    if (/BUSINESS|PRO/.test(l)) return 'pro';
+    if (/BUSINESS|\bPRO\b/.test(l)) return 'pro';
+    if (/\bLEP\b|EPARGNE POPULAIRE/.test(l)) return 'LEP';
+    if (/\bLDDS?\b|DEVELOPPEMENT DURABLE/.test(l)) return 'LDDS';
+    if (/LIVRET A\b|\bLIVRET\b/.test(l)) return 'LA';
+    if (/\bPEA\b|PLAN D.EPARGNE EN ACTIONS/.test(l)) return 'PEA';
     if (/BOURSO/.test(l)) return 'perso';
     return null;
   },
+  COMPTES_EPARGNE: ['LA', 'LEP', 'LDDS', 'PEA'],
+  estEpargne(compte) { return csv.COMPTES_EPARGNE.includes(compte); },
   dateAchat(libelle) { const m = /^(?:CARTE|AVOIR) (\d\d)\/(\d\d)\/(\d\d)/.exec(libelle); return m ? `20${m[3]}-${m[2]}-${m[1]}` : null; },
   type(libelle, montant) {
     const l = libelle.trim();
@@ -389,7 +492,7 @@ const csv = {
       const montant = csv.montant(r[6]);
       if (montant === null) { res.erreurs.push(`ligne ${num} : montant "${r[6]}" illisible`); return; }
       const compte = csv.compte(r[9]);
-      if (!compte) { res.erreurs.push(`ligne ${num} : compte "${r[9]}" non reconnu (attendu BoursoBank ou Compte Bourso Business)`); return; }
+      if (!compte) { res.erreurs.push(`ligne ${num} : compte "${r[9]}" non reconnu (attendu BoursoBank, Compte Bourso Business, Livret A, LEP, LDDS ou PEA)`); return; }
       res.lues++; res.comptes[compte] = (res.comptes[compte] || 0) + 1;
       // solde après opération (colonne 11, lue par position) : on garde celui de la ligne la plus récente du fichier
       const solde = csv.montant(r[10]);
@@ -400,7 +503,8 @@ const csv = {
         compte, type, date_op, date_achat: csv.dateAchat(libelle),
         libelle, libelle_suggere: (r[3] || '').trim() || null,
         cat_bourso: (r[4] || '').trim() || null, cat_bourso_parent: (r[5] || '').trim() || null,
-        montant, cle: norm.cle(libelle), motif: type === 'interne_bourso' ? null : csv.motif(libelle)
+        montant, cle: norm.cle(libelle), motif: type === 'interne_bourso' ? null : csv.motif(libelle),
+        solde   // solde du compte après l'opération (colonne 11) : sert à la courbe de patrimoine des comptes d'épargne
       }));
     });
     return res;
@@ -431,7 +535,9 @@ const serial = {
 };
 
 // ---------------------------------------------------------- catalogue des catégories (Méthodo §2-§4)
-const CATALOGUE = [
+// CATALOGUE_BASE est la liste livrée ; CATALOGUE / CAT / FAMILLES sont recalculés par catalogue.appliquer(rules) avec les
+// catégories ajoutées, renommées, fusionnées ou masquées par l'utilisateur (rules.catalogue, Méthodo v3 §2.11)
+const CATALOGUE_BASE = [
   // perso
   ['REV.KINE', 'Prélèvement exploitant reçu', 'perso'], ['REV.REMPLA', 'Part remplacement reversée', 'perso'],
   ['REV.SANTE', 'Remboursements santé (patient)', 'perso'], ['REV.FAMILLE', 'Virements famille reçus', 'perso'], ['REV.AUTRE', 'Autre crédit', 'perso'],
@@ -445,10 +551,13 @@ const CATALOGUE = [
   ['SANTE', 'Santé et soins', 'perso'],
   ['PROJ.DONATION', 'Projet donation', 'perso'], ['PROJ.LOCATIF', 'Projet locatif', 'perso'],
   ['HB.AVANCES', 'Avances / remboursements amis', 'perso'], ['HB.AUTRE', 'Hors budget', 'perso'],
-  ['INT.LIVRET', 'Livret ↔ courant', 'perso'], ['INT.REVOLUT', 'Virement à soi-même', 'perso'],
-  // épargne
+  ['INT.LIVRET', 'Livret ↔ courant', 'perso'], ['INT.REVOLUT', 'Virement à soi-même (Revolut, autre banque)', 'perso'],
+  // épargne (vue depuis le compte courant)
   ['EPG.LEP', 'Versement LEP', 'epargne'], ['EPG.LA', 'Versement Livret A', 'epargne'], ['EPG.LDDS', 'Versement LDDS', 'epargne'],
   ['EPG.PEA', 'Versement PEA', 'epargne'], ['EPG.AV', 'Versement assurance-vie', 'epargne'], ['EPG.CRYPTO', 'Crypto (DCA)', 'epargne'],
+  // mouvements sur les comptes d'épargne eux-mêmes (CSV Livret A, LEP, LDDS, PEA)
+  ['EPC.VERS', 'Versement reçu du courant', 'epargne'], ['EPC.RETRAIT', 'Retrait vers le courant', 'epargne'], ['EPC.INTERETS', 'Intérêts', 'epargne'],
+  ['EPC.FRAIS', 'Frais, prélèvements sociaux', 'epargne'], ['EPC.TITRES', 'Achat / vente de titres (PEA)', 'epargne'], ['EPC.AUTRE', 'Autre mouvement sur un compte d\'épargne', 'epargne'],
   // pro
   ['HON.CPAM', 'Honoraires CPAM', 'pro'], ['HON.AMC', 'Tiers payant complémentaire', 'pro'], ['HON.CHQ', 'Chèques patients', 'pro'], ['HON.ESP', 'Espèces patients', 'pro'], ['HON.CB', 'CB patients', 'pro'], ['HON.REMPLA', 'Remplacement (virement du remplacé)', 'pro'],
   ['ENT.FIFPL', 'Prise en charge FIFPL', 'pro'], ['ENT.RBT', 'Remboursements divers', 'pro'], ['ENT.AUTRE', 'Autre crédit pro', 'pro'],
@@ -459,11 +568,87 @@ const CATALOGUE = [
   ['PREL.KINE', 'Prélèvement exploitant', 'pro'], ['PREL.REMPLA', 'Reversement remplacement', 'pro'],
   ['HE.AVANCES', 'Avances hors exploitation', 'pro']
 ];
+const FAMILLES_BASE = { REV: 'Revenus (perso)', FIX: 'Charges fixes', ABO: 'Abonnements', ALIM: 'Alimentation', MOB: 'Mobilité', LOIS: 'Loisirs', SANTE: 'Santé et soins', PROJ: 'Projets', HB: 'Hors budget', INT: 'Mouvements internes', EPG: 'Épargne et investissement', EPC: 'Comptes d\'épargne (mouvements internes)', HON: 'Honoraires (pro)', ENT: 'Autres entrées (pro)', RETRO: 'Rétrocessions', FRAIS: "Frais d'exercice", DEPL: 'Déplacements (pro)', REPAS: 'Repas carte pro', COT: 'Cotisations et impôts', PREL: "Prélèvements de l'exploitant (pro → perso)", HE: 'Hors exploitation (pro)' };
+const CATALOGUE = CATALOGUE_BASE.map(c => c.slice());
 const CAT = Object.fromEntries(CATALOGUE.map(([c, l, s]) => [c, { code: c, libelle: l, sphere: s }]));
-const FAMILLES = { REV: 'Revenus (perso)', FIX: 'Charges fixes', ABO: 'Abonnements', ALIM: 'Alimentation', MOB: 'Mobilité', LOIS: 'Loisirs', SANTE: 'Santé et soins', PROJ: 'Projets', HB: 'Hors budget', INT: 'Mouvements internes', EPG: 'Épargne et investissement', HON: 'Honoraires (pro)', ENT: 'Autres entrées (pro)', RETRO: 'Rétrocessions', FRAIS: "Frais d'exercice", DEPL: 'Déplacements (pro)', REPAS: 'Repas carte pro', COT: 'Cotisations et impôts', PREL: "Prélèvements de l'exploitant (pro → perso)", HE: 'Hors exploitation (pro)' };
+const FAMILLES = Object.assign({}, FAMILLES_BASE);
 const libelleCat = (code) => { if (!code) return ''; const c = CAT[code]; const fam = FAMILLES[code.split('.')[0]] || ''; return c ? `${fam ? fam + ' › ' : ''}${c.libelle}` : fam; };
 const ENTITES = ['COMMUN', 'NICE', 'EHPAD', 'REMPLA'];
-const INTERNE_CATS = /^(EPG\.|INT\.|PREL\.)/;
+const INTERNE_CATS = /^(EPG\.|INT\.|PREL\.|EPC\.)/;
+const SPHERES = ['perso', 'epargne', 'pro'];
+
+// Catégories éditables (Méthodo v3 §2.11). rules.catalogue = { ajouts: [[code, libelle, sphere]], libelles: { code: libelle }, masques: [code],
+// familles: { FAM: libelle }, fusions: [{ de, vers, date }] }. Les codes livrés ne sont jamais supprimés : un code fusionné ou masqué
+// reste connu (libellé, légende) mais disparaît des sélecteurs ; une fusion recatégorise toutes les lignes, règles, tiers et cibles.
+const catalogue = {
+  defaut() { return { ajouts: [], libelles: {}, masques: [], familles: {}, fusions: [] }; },
+  conf(rules) { if (!rules.catalogue) rules.catalogue = catalogue.defaut(); const c = rules.catalogue; for (const [k, v] of Object.entries(catalogue.defaut())) if (c[k] === undefined) c[k] = v; return c; },
+  codeValide(code) { return /^[A-Z][A-Z0-9-]*(\.[A-Z][A-Z0-9-]*)?$/.test(code); },
+  // recalcule CATALOGUE, CAT et FAMILLES en place (les références existantes restent valables)
+  appliquer(rules) {
+    const c = rules ? catalogue.conf(rules) : catalogue.defaut();
+    const liste = CATALOGUE_BASE.map(x => x.slice());
+    for (const a of c.ajouts) if (!liste.some(x => x[0] === a[0])) liste.push([a[0], a[1], a[2]]);
+    for (const x of liste) if (c.libelles[x[0]]) x[1] = c.libelles[x[0]];
+    CATALOGUE.length = 0; CATALOGUE.push(...liste);
+    for (const k of Object.keys(CAT)) delete CAT[k];
+    for (const [code, libelle, sphere] of liste) CAT[code] = { code, libelle, sphere, masque: c.masques.includes(code) };
+    for (const k of Object.keys(FAMILLES)) delete FAMILLES[k];
+    Object.assign(FAMILLES, FAMILLES_BASE, c.familles);
+    for (const [code] of liste) { const f = code.split('.')[0]; if (!FAMILLES[f]) FAMILLES[f] = f; }
+    return CATALOGUE;
+  },
+  visibles(sphere) { return CATALOGUE.filter(x => (!sphere || x[2] === sphere) && !CAT[x[0]].masque).map(x => x[0]); },
+  ajouter(rules, code, libelle, sphere, libelleFamille) {
+    code = String(code || '').trim().toUpperCase();
+    if (!catalogue.codeValide(code)) throw new Error('code invalide : lettres, chiffres, tirets, un point au plus (ex. LOIS.SPORT)');
+    if (!SPHERES.includes(sphere)) throw new Error('sphère inconnue');
+    const c = catalogue.conf(rules);
+    if (CATALOGUE_BASE.some(x => x[0] === code) || c.ajouts.some(x => x[0] === code)) throw new Error('code déjà existant : ' + code);
+    c.ajouts.push([code, String(libelle || code).trim() || code, sphere]);
+    const fam = code.split('.')[0];
+    if (!FAMILLES_BASE[fam] && !c.familles[fam]) c.familles[fam] = String(libelleFamille || fam).trim() || fam;
+    c.masques = c.masques.filter(x => x !== code);
+    catalogue.appliquer(rules);
+  },
+  renommer(rules, code, libelle, libelleFamille) {
+    const c = catalogue.conf(rules);
+    if (!CAT[code]) throw new Error('code inconnu : ' + code);
+    const l = String(libelle || '').trim();
+    const base = CATALOGUE_BASE.find(x => x[0] === code);
+    if (l) { if (base && base[1] === l) delete c.libelles[code]; else c.libelles[code] = l; }
+    if (libelleFamille !== undefined) { const fam = code.split('.')[0], lf = String(libelleFamille || '').trim(); if (!lf || FAMILLES_BASE[fam] === lf) delete c.familles[fam]; else c.familles[fam] = lf; }
+    catalogue.appliquer(rules);
+  },
+  masquer(rules, code, masque) {
+    const c = catalogue.conf(rules);
+    if (!CAT[code]) throw new Error('code inconnu : ' + code);
+    c.masques = c.masques.filter(x => x !== code);
+    if (masque !== false) c.masques.push(code);
+    catalogue.appliquer(rules);
+  },
+  // Fusion : toutes les lignes (validées comprises), règles, tiers, propositions, cibles et abonnements passent de `de` à `vers` ; `de` est masqué.
+  nbLignes(data, code) { return data.operations.filter(o => o.categorie === code).length; },
+  fusionner(rules, data, de, vers) {
+    if (!CAT[de] || !CAT[vers]) throw new Error('code inconnu');
+    if (de === vers) throw new Error('même code');
+    const c = catalogue.conf(rules);
+    let n = 0;
+    for (const o of data.operations) {
+      if (o.categorie === de) { o.categorie = vers; o.interne = INTERNE_CATS.test(vers); n++; }
+      if (o.propositions && o.propositions.includes(de)) o.propositions = [...new Set(o.propositions.map(p => p === de ? vers : p))];
+    }
+    const d = util.nowIso().slice(0, 10);
+    for (const r of rules.rules) { if (r.categorie === de) { r.categorie = vers; r.interne = INTERNE_CATS.test(vers); r.modifie = d; } if (r.options && r.options.propositions) r.options.propositions = [...new Set(r.options.propositions.map(p => p === de ? vers : p))]; }
+    for (const h of rules.historique || []) if (h.categorie === de) h.categorie = vers;
+    for (const t of Object.values(rules.tiers || {})) if (t.categorie === de) t.categorie = vers;
+    const bc = (rules.config && rules.config.budget_cible) || {};
+    if (bc[de] !== undefined) { if (bc[vers] === undefined) bc[vers] = bc[de]; else bc[vers] = Math.round((Number(bc[vers]) + Number(bc[de])) * 100) / 100; delete bc[de]; }
+    c.fusions.push({ de, vers, date: d, lignes: n });
+    catalogue.masquer(rules, de, true);
+    return n;
+  }
+};
 const ALIM_RX = /MONOP|CARREFOUR(?! DAC)|INTERMARCHE|AUCHAN|LIDL|CASINO|PICARD|GRAND FRAIS|TGTG|POISSON|PRIMEUR|TERRE DE PROVENC|UBER \* EATS|UBER EATS|DELIVEROO|BURGER KING|MCDO|PANERA|POKE|TRATTORIA|PIZZ|BRASSERIE|\bBAR\b|\bPUB\b|RESTAU|SEAZON|BOULANG|PATISS|\bPAIN\b|MAXICOFFEE|SELECTA|\bCAFE\b|JELATO|GLACE/;
 const CARBU_RX = /\bESSO\b|\bTOTAL\b|TOTALENERGIES STATION|SASU RRB|\bRELAIS\b|STATION|CARREFOUR DAC|ENERGIES SERVICES|\bAVIA\b|\bBP\b|\bLECLERC\b/;
 const ENTRETIEN_RX = /NORAUTO|AUTO BILAN|FEU VERT|MIDAS|SPEEDY|GARAGE|CARWASH/;
@@ -538,7 +723,7 @@ const modele = {
       config: { titulaire: null, budget_cible: {}, provisions: { URSSAF: null, CARPIMKO: null, CFE: null, IR: null }, precaution_cible_mois: 6, compteurs: {} },
       rules: modele.seedRules(), historique: [], appariements: [],
       poches: ['PRECAUTION', 'JAPON-2027', 'VACANCES-COUPLE', 'PROJET-A-DEUX', 'APPORT-LOCATIF', 'DONATION'].map(tag => ({ tag, nom: tag, support: 'EPG.LA', cible: null, echeance: null, alloue: 0, consomme: 0, ajustements: [], actif: true })),
-      abonnements: [], tiers: {}
+      abonnements: [], tiers: {}, catalogue: catalogue.defaut()
     };
   },
   dataDefaut(machine) { return { schema: SCHEMA, meta: modele.meta(machine), operations: [], mensuel: {}, soldes: {} }; },
@@ -556,9 +741,11 @@ const modele = {
     if (!rules.config.budget_cible) { rules.config.budget_cible = {}; modif = true; }
     if (!rules.config.provisions) { rules.config.provisions = { URSSAF: null, CARPIMKO: null, CFE: null, IR: null }; modif = true; }
     if (!rules.abonnements) { rules.abonnements = []; modif = true; }
+    if (!rules.catalogue) { rules.catalogue = catalogue.defaut(); modif = true; }
+    catalogue.appliquer(rules);
     if (!data.soldes) { data.soldes = {}; modif = true; }
     for (const p of rules.poches) { if (!p.ajustements) { p.ajustements = []; modif = true; } if (p.actif === undefined) { p.actif = true; modif = true; } }
-    for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } }
+    for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } if (o.solde === undefined) { o.solde = null; modif = true; } }
     return modif;
   },
   pourEcriture(nom, obj) {
@@ -613,7 +800,7 @@ const modele = {
       const r = JSON.parse(JSON.stringify(a));
       for (const k of ['doctolib_nice', 'doctolib_ehpad', 'especes']) if (vide(r[k]) && !vide(b[k])) { r[k] = b[k]; bilan.mensuel_autre++; }
       r.soldes = r.soldes || {};
-      for (const k of ['LA', 'LEP', 'LDDS']) if (vide(r.soldes[k]) && b.soldes && !vide(b.soldes[k])) { r.soldes[k] = b.soldes[k]; bilan.mensuel_autre++; }
+      for (const k of SUPPORTS_PATRIMOINE) if (vide(r.soldes[k]) && b.soldes && !vide(b.soldes[k])) { r.soldes[k] = b.soldes[k]; bilan.mensuel_autre++; }
       res.mensuel[m] = r;
     }
     modele.majSoldes(res, ici.soldes); modele.majSoldes(res, autre.soldes);
@@ -667,6 +854,14 @@ const modele = {
     }
     res.tiers = res.tiers || {};
     for (const [n, t] of Object.entries(autre.tiers || {})) if (!res.tiers[n]) { res.tiers[n] = cl(t); bilan.tiers_autre++; }
+    // catalogue : union des ajouts (par code), des masques et des fusions ; libellés et familles d'« ici » gagnent, les manquants sont repris
+    const ci2 = catalogue.conf(res), ca2 = Object.assign(catalogue.defaut(), autre.catalogue || {});
+    for (const a of ca2.ajouts) if (!ci2.ajouts.some(x => x[0] === a[0])) { ci2.ajouts.push(cl(a)); bilan.catalogue_autre = (bilan.catalogue_autre || 0) + 1; }
+    for (const [k, v] of Object.entries(ca2.libelles)) if (vide(ci2.libelles[k])) ci2.libelles[k] = v;
+    for (const [k, v] of Object.entries(ca2.familles)) if (vide(ci2.familles[k])) ci2.familles[k] = v;
+    for (const m of ca2.masques) if (!ci2.masques.includes(m)) ci2.masques.push(m);
+    for (const f of ca2.fusions) if (!ci2.fusions.some(x => x.de === f.de && x.vers === f.vers && x.date === f.date)) ci2.fusions.push(cl(f));
+    catalogue.appliquer(res);
     const ca = autre.config || {}, ci = res.config;
     if (vide(ci.titulaire) && !vide(ca.titulaire)) { ci.titulaire = ca.titulaire; bilan.config_autre++; }
     if (vide(ci.precaution_cible_mois) && !vide(ca.precaution_cible_mois)) { ci.precaution_cible_mois = ca.precaution_cible_mois; bilan.config_autre++; }
@@ -745,6 +940,21 @@ const engine = {
       const type = poser(p, q);
       rules.appariements.push({ id_pro: p.id, id_perso: q.id, type });
     }
+    // courant ↔ compte d'épargne (Méthodo v3 §4.4) : un virement « vers LIVRET A » sur le perso et son miroir « depuis BoursoBank » sur le
+    // livret décrivent un seul mouvement ; même montant, ±2 jours, sens opposés → appariés, le côté épargne devient EPC.VERS / EPC.RETRAIT
+    const epargne = ops.filter(o => csv.estEpargne(o.compte) && o.type !== 'manuel' && !dejaPaires.has(o.id)).sort((a, b) => a.date_op.localeCompare(b.date_op));
+    const courants = ops.filter(o => (o.compte === 'perso' || o.compte === 'pro') && !/^(carte|avoir|prelevement|manuel)$/.test(o.type) && !dejaPaires.has(o.id));
+    const supportDe = { LA: 'EPG.LA', LEP: 'EPG.LEP', LDDS: 'EPG.LDDS', PEA: 'EPG.PEA' };
+    for (const e of epargne) {
+      const miroir = courants.find(c => !dejaPaires.has(c.id) && Math.sign(c.montant) !== Math.sign(e.montant) && util.cents(c.montant) === util.cents(e.montant) && Math.abs(util.jours(c.date_op, e.date_op)) <= 2
+        && (c.type !== 'interne_bourso' || (e.montant > 0 ? /VERS/i : /DEPUIS/i).test(c.cle)));
+      if (!miroir) continue;
+      dejaPaires.add(e.id); dejaPaires.add(miroir.id);
+      e.apparie = miroir.id; miroir.apparie = e.id;
+      res.set(e.id, { categorie: e.montant > 0 ? 'EPC.VERS' : 'EPC.RETRAIT', interne: true, statut: 'auto', regle_id: 'appariement' });
+      // côté courant : même résultat que la règle structurelle (EPG.* / INT.LIVRET), y compris pour un virement saisi à la main
+      res.set(miroir.id, { categorie: e.montant > 0 ? supportDe[e.compte] : 'INT.LIVRET', interne: true, statut: 'auto', regle_id: 'appariement' });
+    }
     // aller-retours avec un particulier, même compte, même montant, sens opposés, ≤ 60 jours
     const nominatifs = ops.filter(o => !dejaPaires.has(o.id) && /^virement_/.test(o.type) && norm.tiers(o.libelle)).sort((a, b) => a.date_op.localeCompare(b.date_op));
     for (let i = 0; i < nominatifs.length; i++) {
@@ -775,15 +985,17 @@ const engine = {
       if (r) { r.hits++; return { categorie: r.categorie, entite: r.entite ?? undefined, poche: r.poche, interne: r.interne, statut: 'auto', regle_id: r.id }; }
     }
     // 3. structurelles
+    if (csv.estEpargne(op.compte)) return engine.resoudreEpargne(op);
     if (op.type === 'interne_bourso') {
       const m = /VIREMENT (DEPUIS|VERS) (LIVRET A|LEP|LDDS?|PEA|LIVRET)/i.exec(op.cle);
       if (m && m[1].toUpperCase() === 'VERS') { const s = m[2].toUpperCase(); const cat = s === 'LEP' ? 'EPG.LEP' : s === 'PEA' ? 'EPG.PEA' : s.startsWith('LDD') ? 'EPG.LDDS' : 'EPG.LA'; return { categorie: cat, interne: true, statut: 'auto', regle_id: 'interne' }; }
       return { categorie: 'INT.LIVRET', interne: true, statut: 'auto', regle_id: 'interne' };
     }
     const tiers = norm.tiers(op.libelle);
-    if (/^VIR INST /.test(op.cle) && tiers) {
-      if (ctx.titulaire && tiers === ctx.titulaire) return { categorie: 'INT.REVOLUT', interne: true, statut: 'auto', regle_id: 'titulaire' };
-      if (!ctx.titulaire) return { categorie: null, statut: 'a_valider', propositions: ['INT.REVOLUT'], note: `virement instantané vers ${tiers} : si c'est toi (Revolut), renseigne ton nom dans Règles › Paramètres` };
+    // virement à soi-même (Revolut, autre banque) : le nom du titulaire, sous n'importe quelle écriture (§2.10)
+    if (tiers && /^VIR (INST|SEPA) /.test(op.cle)) {
+      if (ctx.titulaire && norm.memePersonne(tiers, ctx.titulaire)) return { categorie: 'INT.REVOLUT', interne: true, statut: 'auto', regle_id: 'titulaire' };
+      if (!ctx.titulaire && /^VIR INST /.test(op.cle)) return { categorie: null, statut: 'a_valider', propositions: ['INT.REVOLUT', ...(sens === 'debit' ? ['LOIS.CADEAUX', 'HB.AVANCES'] : ['REV.FAMILLE', 'HB.AVANCES'])], note: `virement instantané ${sens === 'debit' ? 'vers' : 'de'} ${tiers} : si c'est toi (Revolut), renseigne ton nom dans Avancé › Paramètres` };
     }
     if (op.motif) {
       const mo = norm.stripAccents(op.motif).toUpperCase();
@@ -823,7 +1035,8 @@ const engine = {
       return { categorie: null, statut: 'a_valider', propositions: sens === 'debit' ? ['LOIS.CADEAUX', 'HB.AVANCES', 'HB.AUTRE'] : ['REV.FAMILLE', 'HB.AVANCES', 'REV.AUTRE'], note: `virement ${sens === 'debit' ? 'vers' : 'de'} ${tiers} : première fois` };
     }
     // 5. indices Bourso
-    const idx = INDICES_BOURSO[op.compte][op.cat_bourso] || INDICES_BOURSO[op.compte][op.cat_bourso_parent];
+    const ib = INDICES_BOURSO[op.compte] || {};
+    const idx = ib[op.cat_bourso] || ib[op.cat_bourso_parent];
     if (idx) {
       if (op.compte === 'pro' && op.cat_bourso === 'Remboursements') return { categorie: null, statut: 'a_valider', propositions: ['HON.CPAM', 'HON.AMC'], note: 'indice Bourso' };
       return { categorie: null, statut: 'a_valider', propositions: [idx], note: 'indice Bourso' };
@@ -831,6 +1044,15 @@ const engine = {
     // 6. rien
     const def = op.compte === 'pro' ? (sens === 'credit' ? ['ENT.AUTRE'] : ['FRAIS.AUTRE']) : (sens === 'credit' ? ['REV.AUTRE'] : []);
     return { categorie: null, statut: 'a_valider', propositions: def };
+  },
+  // Ligne d'un compte d'épargne non appariée (Méthodo v3 §4.4) : intérêts, frais, titres, sinon versement/retrait à confirmer
+  resoudreEpargne(op) {
+    const c = op.cle;
+    if (/INTERET|INTÉRÊT|INTERÊT/i.test(c)) return { categorie: 'EPC.INTERETS', interne: true, statut: 'auto', regle_id: 'structurel' };
+    if (/PRELEVEMENT(S)? SOCIA|\bCSG\b|\bFRAIS\b|COMMISSION|DROITS DE GARDE|TAXE/i.test(c)) return { categorie: 'EPC.FRAIS', interne: true, statut: 'auto', regle_id: 'structurel' };
+    if (op.compte === 'PEA' && /ACHAT|VENTE|SOUSCRIPTION|RACHAT|COUPON|DIVIDENDE|\bETF\b|\bOPC\b|FCP|SICAV/i.test(c)) return { categorie: 'EPC.TITRES', interne: true, statut: 'auto', regle_id: 'structurel' };
+    if (/VIREMENT|^VIR /i.test(c)) return { categorie: null, statut: 'a_valider', propositions: op.montant > 0 ? ['EPC.VERS', 'EPC.AUTRE'] : ['EPC.RETRAIT', 'EPC.AUTRE'], note: 'virement sans miroir sur le compte courant importé : confirme, ou importe le CSV du courant sur la même période' };
+    return { categorie: null, statut: 'a_valider', propositions: ['EPC.AUTRE', 'EPC.INTERETS', 'EPC.FRAIS'] };
   },
   pocheParTag(tag, rules) {
     tag = tag.toUpperCase();
@@ -841,7 +1063,7 @@ const engine = {
   run(data, rules) {
     for (const r of rules.rules) r.hits = 0;
     const paires = engine.apparier(data.operations, rules);
-    const ctx = { rules, titulaire: rules.config.titulaire ? norm.stripAccents(rules.config.titulaire).toUpperCase().replace(/\s+/g, ' ').trim() : null, paires };
+    const ctx = { rules, titulaire: rules.config.titulaire && norm.mots(rules.config.titulaire).length >= 2 ? rules.config.titulaire : null, paires };
     for (const op of data.operations) {
       if (op.statut === 'valide') { if (op.regle_id && op.regle_id.startsWith('r-')) { const r = rules.rules.find(x => x.id === op.regle_id); if (r) r.hits++; } continue; }
       if (!paires.has(op.id)) op.apparie = null;
@@ -895,10 +1117,45 @@ const engine = {
 
 // ---------------------------------------------------------- saisies mensuelles et poches (Méthodo §3.9, §4.3, §9)
 const SUPPORTS = { 'EPG.LA': 'Livret A', 'EPG.LEP': 'LEP', 'EPG.LDDS': 'LDDS' };
+// Supports suivis dans le patrimoine (Méthodo v3 §4.5) : LA/LEP/LDDS/PEA depuis leurs CSV (solde après opération) ou saisie ; AV et CRYPTO en saisie,
+// à défaut cumul des versements EPG.* depuis le perso
+const SUPPORTS_PATRIMOINE = ['LA', 'LEP', 'LDDS', 'PEA', 'AV', 'CRYPTO'];
+const SUPPORTS_LIBELLES = { LA: 'Livret A', LEP: 'LEP', LDDS: 'LDDS', PEA: 'PEA', AV: 'Assurance-vie', CRYPTO: 'Crypto' };
 const stats = {
   mois(data) { return [...new Set(data.operations.map(o => util.mois(o.date_op)))].sort(); },
   opsMois(data, m) { return data.operations.filter(o => util.mois(o.date_op) === m); },
-  mensuel(data, m) { return data.mensuel[m] || { doctolib_nice: null, doctolib_ehpad: null, especes: null, soldes: { LA: null, LEP: null, LDDS: null } }; },
+  // liste de mois continue entre deux bornes AAAA-MM
+  plageMois(a, b) { const r = []; let [y, m] = a.split('-').map(Number); const [yb, mb] = b.split('-').map(Number); while (y < yb || (y === yb && m <= mb)) { r.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } } return r; },
+  mensuel(data, m) { return data.mensuel[m] || { doctolib_nice: null, doctolib_ehpad: null, especes: null, soldes: Object.fromEntries(SUPPORTS_PATRIMOINE.map(k => [k, null])) }; },
+  // Patrimoine par support et par mois. Pour chaque mois : saisie du mois > solde CSV de fin de mois > dernière valeur connue reportée
+  // > cumul des versements EPG.* depuis le perso (AV, CRYPTO, PEA sans saisie). Renvoie { mois, series: { k: [v] }, sources: { k: [src] }, dernier: { k: {montant, date, source} } }
+  patrimoine(data) {
+    const moisOps = stats.mois(data), moisSaisis = Object.keys(data.mensuel || {}).filter(m => { const s = data.mensuel[m].soldes || {}; return SUPPORTS_PATRIMOINE.some(k => s[k] !== null && s[k] !== undefined && s[k] !== ''); });
+    const tous = [...moisOps, ...moisSaisis].sort();
+    const res = { mois: [], series: {}, sources: {}, dernier: {} };
+    if (!tous.length) return res;
+    res.mois = stats.plageMois(tous[0], tous[tous.length - 1]);
+    const ops = data.operations.slice().sort((a, b) => a.date_op.localeCompare(b.date_op) || (a.id < b.id ? -1 : 1));
+    const codeVers = { LA: 'EPG.LA', LEP: 'EPG.LEP', LDDS: 'EPG.LDDS', PEA: 'EPG.PEA', AV: 'EPG.AV', CRYPTO: 'EPG.CRYPTO' };
+    for (const k of SUPPORTS_PATRIMOINE) {
+      const serie = [], src = []; let connu = null, connuSrc = null, cumul = 0, unCsv = false, uneSaisie = false;
+      const csvK = ops.filter(o => o.compte === k && o.solde !== null && o.solde !== undefined);
+      for (const m of res.mois) {
+        for (const o of ops) if (util.mois(o.date_op) === m && o.compte === 'perso' && o.categorie === codeVers[k] && o.montant < 0) cumul += -o.montant;
+        const sais = (data.mensuel[m] && data.mensuel[m].soldes) ? data.mensuel[m].soldes[k] : null;
+        const derCsv = csvK.filter(o => util.mois(o.date_op) === m).pop();
+        if (sais !== null && sais !== undefined && sais !== '') { connu = Number(sais); connuSrc = 'saisie'; uneSaisie = true; }
+        else if (derCsv && !(k === 'PEA' && uneSaisie)) { connu = derCsv.solde; connuSrc = 'csv'; unCsv = true; }
+        else if (connu !== null) connuSrc = 'report';
+        if (connu === null && !unCsv && !uneSaisie && cumul > 0) { serie.push(Math.round(cumul * 100) / 100); src.push('versements'); continue; }
+        serie.push(connu === null ? null : Math.round(connu * 100) / 100); src.push(connu === null ? null : connuSrc);
+      }
+      res.series[k] = serie; res.sources[k] = src;
+      const i = serie.map((v, j) => v !== null ? j : -1).filter(j => j >= 0).pop();
+      res.dernier[k] = i === undefined ? null : { montant: serie[i], mois: res.mois[i], source: src[i] };
+    }
+    return res;
+  },
   // Ventilation Nice / EHPAD du mois : part Nice des honoraires et du prélèvement exploitant (V1), null si V0
   ventilation(data, m) {
     const s = stats.mensuel(data, m);
@@ -935,8 +1192,8 @@ const stats = {
     const v = Object.values(parMois); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
   },
   ciblePrecaution(data, rules) { const p = rules.poches.find(p => p.tag === 'PRECAUTION'); if (p && p.cible) return p.cible; const d = stats.depensesMoyennes(data); return d ? d * (rules.config.precaution_cible_mois || 6) : null; },
-  // Dernier solde saisi par support
-  soldes(data) { const ms = Object.keys(data.mensuel).sort(); const r = { LA: null, LEP: null, LDDS: null, mois: null }; for (const m of ms) for (const k of ['LA', 'LEP', 'LDDS']) { const v = data.mensuel[m].soldes && data.mensuel[m].soldes[k]; if (v !== null && v !== undefined && v !== '') { r[k] = Number(v); r.mois = m; } } return r; },
+  // Dernier solde connu par livret (CSV du livret ou saisie, le plus récent), pour le contrôle des poches
+  soldes(data) { const p = stats.patrimoine(data); const r = { LA: null, LEP: null, LDDS: null, mois: null }; for (const k of ['LA', 'LEP', 'LDDS']) { const d = p.dernier[k]; if (d && d.source !== 'versements') { r[k] = d.montant; if (!r.mois || d.mois > r.mois) r.mois = d.mois; } } return r; },
   // Contrôle Σ disponible des poches par support ≤ solde réel ; renvoie les alertes
   controle(data, rules) {
     const soldes = stats.soldes(data), alertes = [], parSupport = {};
@@ -977,8 +1234,11 @@ const bord = {
   // Synthèse perso d'un mois (m = null → tous les mois cumulés).
   // revenus = Σ REV.* ; épargne = Σ EPG.* sortants ; dépenses = Σ nette par catégorie (avoirs déduits), hors HB / INT / interne ;
   // NC = lignes sans catégorie (à valider), comptées à part pour que les totaux restent complets
+  // m : un mois, une liste de mois (année, 12 mois glissants) ou null (cumul)
+  dans(m) { if (!m) return () => true; if (Array.isArray(m)) { const s = new Set(m); return o => s.has(util.mois(o.date_op)); } return o => util.mois(o.date_op) === m; },
   perso(data, m) {
-    const ops = data.operations.filter(o => o.compte === 'perso' && (!m || util.mois(o.date_op) === m));
+    const dans = bord.dans(m);
+    const ops = data.operations.filter(o => o.compte === 'perso' && dans(o));
     const r = { revenus: 0, revenusNC: 0, depenses: 0, depensesNC: 0, epargne: 0, parCat: {}, parFam: {}, taux: null };
     for (const o of ops) {
       const c = o.categorie, f = bord.fam(c);
@@ -1024,12 +1284,14 @@ const bord = {
   // Pro : encaissements / charges d'exercice / cotisations / versé au perso, par entité (ventilation §3.9) ; m = null → cumul
   GROUPES_PRO: { enc: /^(HON|ENT)\./, charges: /^(RETRO|FRAIS|DEPL)\.|^REPAS$|^COT\.INDU$/, cot: /^COT\.(?!INDU)/, prel: /^PREL\./ },
   pro(data, rules, m) {
-    const ops = data.operations.filter(o => o.compte === 'pro' && (!m || util.mois(o.date_op) === m));
+    const dans = bord.dans(m);
+    const ops = data.operations.filter(o => o.compte === 'pro' && dans(o));
     const vide = () => ({ NICE: 0, EHPAD: 0, REMPLA: 0, COMMUN: 0, total: 0 });
-    const r = { enc: vide(), charges: vide(), cot: vide(), prel: vide(), resultat: vide(), nc: 0, retention: null, mode: m ? (stats.ventilation(data, m) === null ? 'V0' : 'V1') : null };
+    const r = { enc: vide(), charges: vide(), cot: vide(), prel: vide(), resultat: vide(), nc: 0, retention: null, parCat: {}, mode: typeof m === 'string' ? (stats.ventilation(data, m) === null ? 'V0' : 'V1') : null };
     for (const o of ops) {
       const g = Object.keys(bord.GROUPES_PRO).find(k => bord.GROUPES_PRO[k].test(o.categorie || ''));
       if (!g) { if (!o.categorie) r.nc += o.montant; continue; }
+      r.parCat[o.categorie] = bord.r2((r.parCat[o.categorie] || 0) + (g === 'enc' ? o.montant : -o.montant));
       const pe = stats.parEntite(data, o) || { COMMUN: o.montant };
       for (const [e, v] of Object.entries(pe)) { const s = g === 'enc' ? v : -v; r[g][e] = (r[g][e] || 0) + s; r[g].total += s; }
     }
@@ -1088,6 +1350,88 @@ const bord = {
     let a = rules.abonnements.find(x => x.cle === cle);
     if (!a) { a = { cle, nom: null, fin_prevue: null, ignore: false }; rules.abonnements.push(a); }
     Object.assign(a, patch); return a;
+  }
+};
+
+// ---------------------------------------------------------- graphiques (Méthodo v3 §9.2) : données prêtes à tracer, sans DOM
+// Une période = { mode: 'mois' | 'annee' | 'glissant', valeur } → liste de mois ; les totaux reprennent bord.perso / bord.pro
+const graphes = {
+  annees(data) { return [...new Set(stats.mois(data).map(m => m.slice(0, 4)))].sort(); },
+  moisPeriode(data, periode) {
+    const tous = stats.mois(data); if (!tous.length) return [];
+    if (periode.mode === 'mois') return [periode.valeur];
+    // les mois avant le premier import ou après le dernier sont exclus (pas de zéros trompeurs)
+    if (periode.mode === 'annee') return stats.plageMois(periode.valeur + '-01', periode.valeur + '-12').filter(m => m >= tous[0] && m <= tous[tous.length - 1]);
+    const fin = tous[tous.length - 1]; const [y, mo] = fin.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 - 11, 1));
+    return stats.plageMois(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`, fin).filter(m => m >= tous[0]);
+  },
+  libellePeriode(periode) { return periode.mode === 'mois' ? periode.valeur : periode.mode === 'annee' ? 'année ' + periode.valeur : '12 derniers mois'; },
+  // Évolution mensuelle perso : une entrée par mois (revenus, dépenses, épargne, taux)
+  persoMensuel(data, mois) { return mois.map(m => { const p = bord.perso(data, m); return { mois: m, revenus: p.revenus, depenses: p.depenses, epargne: p.epargne, taux: p.taux, nc: bord.r2(p.depensesNC + p.revenusNC) }; }); },
+  // Dépenses perso par famille puis sous-catégorie sur la période, triées décroissantes ; les crédits nets (avoirs > dépenses) restent signés
+  persoCategories(data, mois) {
+    const p = bord.perso(data, mois);
+    const familles = Object.entries(p.parFam).map(([code, montant]) => ({ code, libelle: FAMILLES[code] || code, montant, sous: Object.entries(p.parCat).filter(([c]) => bord.fam(c) === code).map(([c, v]) => ({ code: c, libelle: (CAT[c] || {}).libelle || c, montant: v })).sort((a, b) => b.montant - a.montant) })).sort((a, b) => b.montant - a.montant);
+    if (p.depensesNC) familles.push({ code: 'NC', libelle: 'Non catégorisé', montant: p.depensesNC, sous: [] });
+    return { familles, total: p.depenses, revenus: p.revenus, epargne: p.epargne };
+  },
+  // Sankey perso : sources de revenus → Revenus → familles de dépenses, supports d'épargne, non catégorisé, reste
+  sankeyPerso(data, mois) {
+    const dans = bord.dans(mois);
+    const ops = data.operations.filter(o => o.compte === 'perso' && dans(o));
+    const rev = {}, dep = {}, epg = {}; let nc = 0, revNC = 0;
+    for (const o of ops) {
+      const c = o.categorie, f = bord.fam(c);
+      if (!c) { if (o.montant > 0) revNC += o.montant; else nc += -o.montant; continue; }
+      if (f === 'REV') { rev[c] = (rev[c] || 0) + o.montant; continue; }
+      if (f === 'EPG') { if (o.montant < 0) epg[c] = (epg[c] || 0) + -o.montant; continue; }
+      if (o.interne || f === 'HB' || f === 'INT' || f === 'PREL') continue;
+      dep[f] = (dep[f] || 0) - o.montant;
+    }
+    const nodes = [], links = []; const id = (n, libelle, type) => { let i = nodes.findIndex(x => x.name === n); if (i < 0) { nodes.push({ name: n, libelle: libelle || n, type }); i = nodes.length - 1; } return i; };
+    const hub = id('Revenus', 'Revenus', 'hub');
+    for (const [c, v] of Object.entries(rev)) if (v > 0) links.push({ source: id(c, (CAT[c] || {}).libelle || c, 'rev'), target: hub, value: bord.r2(v) });
+    if (revNC > 0) links.push({ source: id('REV.NC', 'Crédits non catégorisés', 'rev'), target: hub, value: bord.r2(revNC) });
+    const totalRev = links.reduce((s, l) => s + l.value, 0);
+    let sorties = 0;
+    for (const [f, v] of Object.entries(dep)) if (v > 0) { links.push({ source: hub, target: id(f, FAMILLES[f] || f, 'dep'), value: bord.r2(v) }); sorties += v; }
+    if (nc > 0) { links.push({ source: hub, target: id('NC', 'Non catégorisé', 'dep'), value: bord.r2(nc) }); sorties += nc; }
+    const totalEpg = Object.values(epg).reduce((s, v) => s + v, 0);
+    if (totalEpg > 0) { const e = id('Épargne', 'Épargne et investissement', 'epg'); links.push({ source: hub, target: e, value: bord.r2(totalEpg) }); sorties += totalEpg; for (const [c, v] of Object.entries(epg)) if (v > 0) links.push({ source: e, target: id(c, (CAT[c] || {}).libelle || c, 'epg'), value: bord.r2(v) }); }
+    const reste = bord.r2(totalRev - sorties);
+    if (reste > 0) links.push({ source: hub, target: id('Reste', 'Reste sur le compte', 'reste'), value: reste });
+    if (reste < 0) links.push({ source: id('Puisé', 'Puisé dans le solde', 'reste'), target: hub, value: -reste });
+    return { nodes, links, totalRev: bord.r2(totalRev), reste };
+  },
+  // Pro : évolution mensuelle et sankey (honoraires → Encaissements → rétrocessions, frais, déplacements, repas, cotisations, versé au perso, reste)
+  proMensuel(data, rules, mois) { return mois.map(m => { const p = bord.pro(data, rules, m); return { mois: m, enc: p.enc.total, charges: p.charges.total, cot: p.cot.total, prel: p.prel.total, resultat: p.resultat.total, entites: { NICE: p.enc.NICE, EHPAD: p.enc.EHPAD, REMPLA: p.enc.REMPLA, COMMUN: p.enc.COMMUN } }; }); },
+  proCategories(data, rules, mois) {
+    const p = bord.pro(data, rules, mois);
+    const groupe = (c) => Object.keys(bord.GROUPES_PRO).find(k => bord.GROUPES_PRO[k].test(c));
+    const fam = {};
+    for (const [c, v] of Object.entries(p.parCat)) { const g = groupe(c); if (g === 'enc') continue; const f = bord.fam(c); (fam[f] = fam[f] || { code: f, libelle: FAMILLES[f] || f, montant: 0, sous: [] }); fam[f].montant = bord.r2(fam[f].montant + v); fam[f].sous.push({ code: c, libelle: (CAT[c] || {}).libelle || c, montant: v }); }
+    const familles = Object.values(fam).map(f => { f.sous.sort((a, b) => b.montant - a.montant); return f; }).sort((a, b) => b.montant - a.montant);
+    return { familles, total: bord.r2(p.charges.total + p.cot.total + p.prel.total), enc: p.enc.total, resultat: p.resultat.total };
+  },
+  sankeyPro(data, rules, mois) {
+    const p = bord.pro(data, rules, mois);
+    const nodes = [], links = []; const id = (n, libelle, type) => { let i = nodes.findIndex(x => x.name === n); if (i < 0) { nodes.push({ name: n, libelle: libelle || n, type }); i = nodes.length - 1; } return i; };
+    const hub = id('Encaissements', 'Encaissements', 'hub');
+    const groupe = (c) => Object.keys(bord.GROUPES_PRO).find(k => bord.GROUPES_PRO[k].test(c));
+    for (const [c, v] of Object.entries(p.parCat)) if (groupe(c) === 'enc' && v > 0) links.push({ source: id(c, (CAT[c] || {}).libelle || c, 'rev'), target: hub, value: v });
+    const sortie = {};
+    for (const [c, v] of Object.entries(p.parCat)) { const g = groupe(c); if (g === 'enc' || v <= 0) continue; const f = bord.fam(c); const k = g === 'prel' ? 'PREL' : f; sortie[k] = bord.r2((sortie[k] || 0) + v); }
+    for (const [f, v] of Object.entries(sortie)) links.push({ source: hub, target: id(f, f === 'PREL' ? 'Versé au perso' : (FAMILLES[f] || f), f === 'PREL' ? 'epg' : 'dep'), value: v });
+    const reste = bord.r2(p.enc.total - Object.values(sortie).reduce((s, v) => s + v, 0));
+    if (reste > 0) links.push({ source: hub, target: id('Reste', 'Reste sur le pro (provisions)', 'reste'), value: reste });
+    if (reste < 0) links.push({ source: id('Puisé', 'Puisé dans le solde pro', 'reste'), target: hub, value: -reste });
+    return { nodes, links, totalEnc: p.enc.total, reste };
+  },
+  // Lignes derrière une part de graphique : compte, mois, famille ou catégorie (NC = sans catégorie)
+  lignes(data, compte, mois, code) {
+    const dans = bord.dans(mois);
+    const ok = code === 'NC' ? o => !o.categorie : code === 'ENC' ? o => /^(HON|ENT)\./.test(o.categorie || '') : (code.includes('.') || CAT[code]) ? o => o.categorie === code : o => bord.fam(o.categorie) === code;
+    return data.operations.filter(o => o.compte === compte && dans(o) && ok(o)).sort((a, b) => b.date_op.localeCompare(a.date_op));
   }
 };
 
@@ -1289,7 +1633,7 @@ const tests = {
   cas() {
     const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     const NB = ' ';
-    const ligne = (date, lib, montant, compte, cat) => `${date};${date};"${lib}";;"${cat || ''}";;"${montant}";;00012345678;${compte};"1${NB}000,00";0`;
+    const ligne = (date, lib, montant, compte, cat, solde) => `${date};${date};"${lib}";;"${cat || ''}";;"${montant}";;00012345678;${compte};"${solde || '1' + NB + '000,00'}";0`;
     const entete = 'Date Opération;Date Valeur;Libellé;Libellé Suggéré;Catégorie;Catégorie Parente;Solde;Commentaire;Numéro Compte;Libellé Compte;Solde;Pointage';
     const P = 'BoursoBank', B = 'Compte Bourso Business';
     const jeu = (lignes) => { const d = modele.dataDefaut('T'); d.operations = csv.toOperations(csv.parse(entete + '\n' + lignes.join('\n')), 't').ops; const r = modele.rulesDefaut('T'); engine.run(d, r); return { d, r, par: (lib) => d.operations.find(o => o.libelle === lib) }; };
@@ -1349,13 +1693,34 @@ const tests = {
       ['fusion : une ligne validée d\'un côté gagne sur une ligne auto de l\'autre ; à égalité « ici » gagne ; poche complétée', () => { const op = () => modele.op({ id: 'o1', compte: 'perso', type: 'carte', date_op: '2026-10-05', libelle: 'X', montant: -10, cle: 'X', categorie: 'ALIM.COURSES', statut: 'auto' }); const a = modele.dataDefaut('A'), b = modele.dataDefaut('B'); a.operations = [op()]; b.operations = [Object.assign(op(), { categorie: 'ALIM.CAFE', statut: 'valide', poche: null })]; a.operations[0].poche = 'JAPON-2027'; const f1 = modele.fusionner(a, b); const c = modele.dataDefaut('C'); c.operations = [Object.assign(op(), { categorie: 'SANTE' })]; const f2 = modele.fusionner(a, c); return f1.data.operations[0].categorie === 'ALIM.CAFE' && f1.data.operations[0].statut === 'valide' && f1.data.operations[0].poche === 'JAPON-2027' && f1.bilan.prises_autre === 1 && f1.bilan.completees === 1 && f2.data.operations[0].categorie === 'ALIM.COURSES' && f2.bilan.prises_autre === 0; }],
       ['fusion rules.json : règles des deux postes réunies, appariements, poches, abonnements, compteurs, config complétée', () => { const a = modele.rulesDefaut('PC'), b = modele.rulesDefaut('MAC'); const ja = jeu([ligne('2026-10-01', 'CARTE 01/10/26 INCONNU CB*1', '-10,00', P)]), jb = jeu([ligne('2026-10-02', 'CARTE 02/10/26 AUTRE CB*1', '-10,00', P)]); engine.corriger(ja.d, a, 'PC', ja.d.operations[0], { categorie: 'SANTE' }); engine.corriger(jb.d, b, 'MAC', jb.d.operations[0], { categorie: 'ABO' }); b.appariements.push({ id_pro: 'x', id_perso: 'y', type: 'KINE' }); b.poches.push({ tag: 'VELO', nom: 'Vélo', support: 'EPG.LA', cible: 500, echeance: null, ajustements: [], actif: true }); b.poches.find(p => p.tag === 'PRECAUTION').cible = 9000; b.abonnements.push({ cle: 'ZWIFT', nom: 'Zwift', fin_prevue: null, ignore: false }); b.config.titulaire = 'Jean Dupont'; b.config.provisions.URSSAF = 20; a.config.provisions.CARPIMKO = 10; b.tiers['PAUL MARTIN'] = { categorie: 'HB.AVANCES', entite: null, nature: null }; const f = modele.fusionnerRegles(a, b); const r = f.rules; const self = modele.fusionnerRegles(r, r); return r.rules.filter(x => x.source === 'user').length === 2 && r.rules.some(x => x.id === 'r-MAC-0001') && r.rules.some(x => x.id === 'r-PC-0001') && new Set(r.rules.map(x => x.id)).size === r.rules.length && r.appariements.length === 1 && r.poches.some(p => p.tag === 'VELO') && r.poches.find(p => p.tag === 'PRECAUTION').cible === 9000 && r.abonnements.length === 1 && r.config.titulaire === 'Jean Dupont' && r.config.provisions.URSSAF === 20 && r.config.provisions.CARPIMKO === 10 && r.config.compteurs.PC === 1 && r.config.compteurs.MAC === 1 && r.tiers['PAUL MARTIN'] && r.meta.machine === 'PC' && f.bilan.regles_autre === 1 && serial.stringify(self.rules) === serial.stringify(r); }],
       ['fusion rules.json : même motif appris des deux côtés → la plus récente gagne, à égalité « ici », l\'autre archivée', () => { const a = modele.rulesDefaut('PC'), b = modele.rulesDefaut('MAC'); const ja = jeu([ligne('2026-10-01', 'PRLV SEPA MACSF-STGA-0034', '-35,00', P)]), jb = jeu([ligne('2026-10-01', 'PRLV SEPA MACSF-STGA-0034', '-35,00', P)]); engine.corriger(ja.d, a, 'PC', ja.d.operations[0], { categorie: 'FIX.MUTUELLE', montant: true }); engine.corriger(jb.d, b, 'MAC', jb.d.operations[0], { categorie: 'FIX.RCP', montant: true }); const f1 = modele.fusionnerRegles(a, b); const u1 = f1.rules.rules.filter(x => x.source === 'user'); b.rules.find(x => x.source === 'user').modifie = '2099-01-01'; const f2 = modele.fusionnerRegles(a, b); const u2 = f2.rules.rules.filter(x => x.source === 'user'); return u1.length === 1 && u1[0].categorie === 'FIX.MUTUELLE' && f1.rules.historique.length === 1 && f1.rules.historique[0].categorie === 'FIX.RCP' && f1.bilan.regles_doublons === 1 && u2.length === 1 && u2[0].categorie === 'FIX.RCP'; }],
-      ['fusion : saisies mensuelles complétées champ par champ, solde le plus récent, fusion avec soi-même sans effet', () => { const a = modele.dataDefaut('A'); a.mensuel = { '2026-10': { doctolib_nice: 3000, doctolib_ehpad: null, especes: null, soldes: { LA: 500, LEP: null, LDDS: null } } }; a.soldes = { pro: { date: '2026-10-10', montant: 1 } }; const b = modele.dataDefaut('B'); b.mensuel = { '2026-10': { doctolib_nice: 1, doctolib_ehpad: 1000, especes: 50, soldes: { LA: 1, LEP: 200, LDDS: null } }, '2026-09': { doctolib_nice: 5, doctolib_ehpad: 5, especes: null, soldes: {} } }; b.soldes = { pro: { date: '2026-10-20', montant: 2 }, perso: { date: '2026-10-01', montant: 3 } }; const f = modele.fusionner(a, b); const m = f.data.mensuel['2026-10']; const self = modele.fusionner(f.data, f.data); return m.doctolib_nice === 3000 && m.doctolib_ehpad === 1000 && m.especes === 50 && m.soldes.LA === 500 && m.soldes.LEP === 200 && f.data.mensuel['2026-09'].doctolib_nice === 5 && f.data.soldes.pro.montant === 2 && f.data.soldes.perso.montant === 3 && f.bilan.mensuel_autre === 5 && serial.stringify(self.data) === serial.stringify(f.data) && self.bilan.identiques === self.bilan.communes; }]
+      ['fusion : saisies mensuelles complétées champ par champ, solde le plus récent, fusion avec soi-même sans effet', () => { const a = modele.dataDefaut('A'); a.mensuel = { '2026-10': { doctolib_nice: 3000, doctolib_ehpad: null, especes: null, soldes: { LA: 500, LEP: null, LDDS: null } } }; a.soldes = { pro: { date: '2026-10-10', montant: 1 } }; const b = modele.dataDefaut('B'); b.mensuel = { '2026-10': { doctolib_nice: 1, doctolib_ehpad: 1000, especes: 50, soldes: { LA: 1, LEP: 200, LDDS: null } }, '2026-09': { doctolib_nice: 5, doctolib_ehpad: 5, especes: null, soldes: {} } }; b.soldes = { pro: { date: '2026-10-20', montant: 2 }, perso: { date: '2026-10-01', montant: 3 } }; const f = modele.fusionner(a, b); const m = f.data.mensuel['2026-10']; const self = modele.fusionner(f.data, f.data); return m.doctolib_nice === 3000 && m.doctolib_ehpad === 1000 && m.especes === 50 && m.soldes.LA === 500 && m.soldes.LEP === 200 && f.data.mensuel['2026-09'].doctolib_nice === 5 && f.data.soldes.pro.montant === 2 && f.data.soldes.perso.montant === 3 && f.bilan.mensuel_autre === 5 && serial.stringify(self.data) === serial.stringify(f.data) && self.bilan.identiques === self.bilan.communes; }],
+      // étape 7 (v0.8) : comptes d'épargne, titulaire, catalogue éditable, graphiques
+      ['tiers : civilités ignorées (M., MR, MME), nom retrouvé', () => norm.tiers('VIR INST M. BELKADI MAXIME JOSUE') === 'BELKADI MAXIME JOSUE' && norm.tiers('VIR SEPA MR BELKADI MAXIME') === 'BELKADI MAXIME' && norm.tiers('VIR SEPA MME VERONIQUE ITTAH BELKADI') === 'VERONIQUE ITTAH BELKADI' && norm.tiers('VIR INST MAXIME BELKADI') === 'MAXIME BELKADI'],
+      ['même personne : ordre, civilités et prénoms supplémentaires ignorés ; un seul mot commun ne suffit pas', () => norm.memePersonne('Maxime Belkadi', 'M. BELKADI MAXIME JOSUE') && norm.memePersonne('MAXIME BELKADI', 'MR BELKADI MAXIME') && !norm.memePersonne('MAXIME BELKADI', 'VERONIQUE ITTAH BELKADI') && !norm.memePersonne('MAXIME BELKADI', 'MARION ITTAH') && !norm.memePersonne('MAXIME', 'MAXIME BELKADI')],
+      ['titulaire : toutes les écritures du nom → INT.REVOLUT (INST et SEPA) ; un autre nom en VIR INST → proposition nominative, pas INT.REVOLUT', () => { const j = jeu([ligne('2026-02-03', 'VIR INST MAXIME BELKADI', '1230,00', P), ligne('2025-08-04', 'VIR SEPA MR BELKADI MAXIME', '1500,00', P), ligne('2024-10-08', 'VIR INST M. BELKADI MAXIME JOSUE', '10,00', P), ligne('2026-06-22', 'VIR INST MARION ITTAH', '-46,00', P)]); j.r.config.titulaire = 'Maxime Belkadi'; engine.run(j.d, j.r); const moi = j.d.operations.filter(o => /BELKADI MAXIME|MAXIME BELKADI/.test(o.libelle)); const autre = j.par('VIR INST MARION ITTAH'); return moi.length === 3 && moi.every(o => o.categorie === 'INT.REVOLUT' && o.interne) && autre.statut === 'a_valider' && autre.propositions[0] === 'LOIS.CADEAUX' && !autre.propositions.includes('INT.REVOLUT'); }],
+      ['titulaire absent : VIR INST proposé INT.REVOLUT en tête, avec les alternatives nominatives', () => { const j = jeu([ligne('2026-06-22', 'VIR INST MARION ITTAH', '-46,00', P)]); const o = j.d.operations[0]; return o.statut === 'a_valider' && o.propositions[0] === 'INT.REVOLUT' && o.propositions.includes('LOIS.CADEAUX'); }],
+      ['comptes d\'épargne reconnus dans « Libellé Compte » (tolérant) ; inconnu rejeté', () => csv.compte('Livret A') === 'LA' && csv.compte('LIVRET A BOURSOBANK') === 'LA' && csv.compte('Livret d\'Épargne Populaire') === 'LEP' && csv.compte('LEP') === 'LEP' && csv.compte('LDDS') === 'LDDS' && csv.compte('Livret Développement Durable et Solidaire') === 'LDDS' && csv.compte('PEA') === 'PEA' && csv.compte('BoursoBank') === 'perso' && csv.compte('Compte Bourso Business') === 'pro' && csv.compte('Revolut') === null],
+      ['solde après opération conservé sur chaque ligne ; id distinct par compte (pas de doublon entre perso et livret)', () => { const r = csv.toOperations(csv.parse(entete + '\n' + ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P, '', `2${NB}100,00`) + '\n' + ligne('2026-10-09', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `5${NB}800,00`)), 't'); return r.ops.length === 2 && r.ops[0].solde === 2100 && r.ops[1].solde === 5800 && r.ops[1].compte === 'LA' && r.ops[0].id !== r.ops[1].id && r.soldes.LA.montant === 5800; }],
+      ['livret : versement apparié au virement du perso (EPG.LA ↔ EPC.VERS, interne), retrait apparié (INT.LIVRET ↔ EPC.RETRAIT), intérêts', () => { const j = jeu([ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A'), ligne('2026-10-20', 'VIR Virement depuis LIVRET A', '300,00', P), ligne('2026-10-20', 'VIR Virement vers BoursoBank', '-300,00', 'Livret A'), ligne('2026-12-31', 'INTERETS 2026', '42,10', 'Livret A')]); const v = j.par('VIR Virement vers LIVRET A'), vm = j.par('VIR Virement depuis BoursoBank'), r = j.par('VIR Virement depuis LIVRET A'), rm = j.par('VIR Virement vers BoursoBank'), i = j.par('INTERETS 2026'); return v.categorie === 'EPG.LA' && vm.categorie === 'EPC.VERS' && vm.interne && v.apparie === vm.id && vm.apparie === v.id && r.categorie === 'INT.LIVRET' && rm.categorie === 'EPC.RETRAIT' && rm.apparie === r.id && i.categorie === 'EPC.INTERETS' && i.statut === 'auto'; }],
+      ['livret : virement sans miroir → à valider (EPC.VERS proposé) ; jamais compté dans le bilan perso', () => { const j = jeu([ligne('2026-10-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A'), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-50,00', P)]); const vm = j.par('VIR Virement depuis BoursoBank'); const p = bord.perso(j.d, '2026-10'); return vm.statut === 'a_valider' && vm.propositions[0] === 'EPC.VERS' && p.revenus === 0 && p.depenses === 50; }],
+      ['livret : une poche posée sur le virement perso survit à l\'appariement', () => { const j = jeu([ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-09', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A')]); j.par('VIR Virement vers LIVRET A').poche = 'JAPON-2027'; engine.run(j.d, j.r); return j.par('VIR Virement vers LIVRET A').poche === 'JAPON-2027' && j.par('VIR Virement vers LIVRET A').categorie === 'EPG.LA'; }],
+      ['PEA : achats de titres et prélèvements sociaux reconnus', () => { const j = jeu([ligne('2026-10-12', 'ACHAT ETF MONDE 12 PARTS', '-480,00', 'PEA'), ligne('2026-10-15', 'PRELEVEMENTS SOCIAUX', '-3,20', 'PEA')]); return j.par('ACHAT ETF MONDE 12 PARTS').categorie === 'EPC.TITRES' && j.par('PRELEVEMENTS SOCIAUX').categorie === 'EPC.FRAIS'; }],
+      ['patrimoine : solde CSV de fin de mois par livret, report des mois sans ligne, saisie prioritaire, AV = cumul des versements à défaut de saisie', () => { const j = jeu([ligne('2026-09-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `5${NB}800,00`), ligne('2026-09-25', 'VIR Virement depuis BoursoBank', '200,00', 'Livret A', '', `6${NB}000,00`), ligne('2026-11-03', 'VIR Virement depuis BoursoBank', '100,00', 'Livret A', '', `6${NB}100,00`), ligne('2026-09-15', 'PRLV SEPA LINXEA VIE', '-150,00', P), ligne('2026-10-15', 'PRLV SEPA LINXEA VIE', '-150,00', P)]); j.d.mensuel['2026-10'] = { soldes: { LEP: 4000 } }; const p = stats.patrimoine(j.d); const i = m => p.mois.indexOf(m); return p.mois.join() === '2026-09,2026-10,2026-11' && p.series.LA[i('2026-09')] === 6000 && p.series.LA[i('2026-10')] === 6000 && p.sources.LA[i('2026-10')] === 'report' && p.series.LA[i('2026-11')] === 6100 && p.series.LEP[i('2026-09')] === null && p.series.LEP[i('2026-10')] === 4000 && p.sources.LEP[i('2026-10')] === 'saisie' && p.series.LEP[i('2026-11')] === 4000 && p.series.AV[i('2026-09')] === 150 && p.series.AV[i('2026-10')] === 300 && p.sources.AV[i('2026-10')] === 'versements' && p.dernier.LA.montant === 6100 && p.dernier.LA.source === 'csv' && p.dernier.CRYPTO === null; }],
+      ['poches : le solde du livret vient du CSV du livret quand il existe (plus de saisie nécessaire)', () => { const j = jeu([ligne('2026-10-08', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-08', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `2${NB}500,00`)]); j.par('VIR Virement vers LIVRET A').poche = 'PRECAUTION'; const c = stats.controle(j.d, j.r); return c.soldes.LA === 2500 && c.alertes.length === 0; }],
+      ['catalogue : ajout d\'une sous-catégorie dans une famille existante et d\'une famille nouvelle, visible dans les sélecteurs, légende', () => { const r = modele.rulesDefaut('T'); catalogue.ajouter(r, 'lois.sport', 'Sport', 'perso'); catalogue.ajouter(r, 'ANIM.VETO', 'Vétérinaire', 'perso', 'Animaux'); const ok = CAT['LOIS.SPORT'] && CAT['LOIS.SPORT'].libelle === 'Sport' && catalogue.visibles('perso').includes('LOIS.SPORT') && FAMILLES.ANIM === 'Animaux' && CAT['ANIM.VETO'].sphere === 'perso' && libelleCat('ANIM.VETO') === 'Animaux › Vétérinaire'; let refuse = false; try { catalogue.ajouter(r, 'LOIS.SPORT', 'x', 'perso'); } catch (e) { refuse = true; } let refuse2 = false; try { catalogue.ajouter(r, 'lois sport', 'x', 'perso'); } catch (e) { refuse2 = true; } catalogue.appliquer(modele.rulesDefaut('T')); return ok && refuse && refuse2 && !CAT['LOIS.SPORT']; }],
+      ['catalogue : renommage (libellé seulement, code inchangé), masquage, retour au libellé livré', () => { const r = modele.rulesDefaut('T'); catalogue.renommer(r, 'ALIM.CAFE', 'Cafés et boulangeries'); const ok1 = CAT['ALIM.CAFE'].libelle === 'Cafés et boulangeries' && r.catalogue.libelles['ALIM.CAFE'] === 'Cafés et boulangeries'; catalogue.renommer(r, 'ALIM.CAFE', 'Cafés, boulangeries'); const ok2 = r.catalogue.libelles['ALIM.CAFE'] === undefined; catalogue.masquer(r, 'MOB.MICRO'); const ok3 = CAT['MOB.MICRO'].masque && !catalogue.visibles('perso').includes('MOB.MICRO') && catalogue.visibles('perso').includes('MOB.TC'); catalogue.masquer(r, 'MOB.MICRO', false); const ok4 = !CAT['MOB.MICRO'].masque; catalogue.appliquer(modele.rulesDefaut('T')); return ok1 && ok2 && ok3 && ok4; }],
+      ['catalogue : fusion ALIM.CAFE → ALIM.RESTO : lignes (validées comprises), règles, tiers, cibles basculés ; ancien code masqué ; journal', () => { const j = jeu([ligne('2026-10-01', 'CARTE 01/10/26 BOULANGERIE X CB*1', '-3,00', P), ligne('2026-10-02', 'CARTE 02/10/26 PANERA CB*1', '-12,00', P)]); engine.corriger(j.d, j.r, 'T', j.par('CARTE 01/10/26 BOULANGERIE X CB*1'), { categorie: 'ALIM.CAFE' }); j.r.config.budget_cible = { 'ALIM.CAFE': 40, 'ALIM.RESTO': 100 }; j.r.tiers['X Y'] = { categorie: 'ALIM.CAFE', entite: null, nature: null }; const n = catalogue.fusionner(j.r, j.d, 'ALIM.CAFE', 'ALIM.RESTO'); engine.run(j.d, j.r); const ok = n === 1 && j.d.operations.every(o => o.categorie === 'ALIM.RESTO') && j.r.rules.filter(x => x.categorie === 'ALIM.CAFE').length === 0 && j.r.tiers['X Y'].categorie === 'ALIM.RESTO' && j.r.config.budget_cible['ALIM.CAFE'] === undefined && j.r.config.budget_cible['ALIM.RESTO'] === 140 && CAT['ALIM.CAFE'].masque && j.r.catalogue.fusions.length === 1 && j.r.catalogue.fusions[0].de === 'ALIM.CAFE'; catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
+      ['catalogue : fusion des rules.json de deux postes = union des ajouts, masques et fusions ; migration des anciens fichiers', () => { const a = modele.rulesDefaut('PC'), b = modele.rulesDefaut('MAC'); catalogue.ajouter(a, 'LOIS.SPORT', 'Sport', 'perso'); catalogue.ajouter(b, 'LOIS.JEUX', 'Jeux', 'perso'); catalogue.masquer(b, 'MOB.MICRO'); const f = modele.fusionnerRegles(a, b).rules; const ok = f.catalogue.ajouts.length === 2 && f.catalogue.masques.includes('MOB.MICRO') && CAT['LOIS.JEUX'] && CAT['LOIS.SPORT']; const r = modele.rulesDefaut('T'); delete r.catalogue; const m = modele.migrer(r, modele.dataDefaut('T')); catalogue.appliquer(modele.rulesDefaut('T')); return ok && m === true && r.catalogue && Array.isArray(r.catalogue.ajouts) && !CAT['LOIS.JEUX']; }],
+      ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
+      ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
+      ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
+      ['graphes pro : évolution, catégories de sorties, sankey encaissements → rétrocessions / cotisations / versé au perso / reste', () => { const j = jeu([ligne('2026-10-06', 'VIR SEPA CPAM 061 NICE', '1000,00', B), ligne('2026-10-05', 'VIR SEPA ORPEA', '-200,00', B), ligne('2026-10-15', 'PRLV SEPA URSSAF PACA', '-150,00', B), ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-400,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '400,00', P)]); const ev = graphes.proMensuel(j.d, j.r, ['2026-10']); const c = graphes.proCategories(j.d, j.r, ['2026-10']); const s = graphes.sankeyPro(j.d, j.r, ['2026-10']); const vers = (n) => s.links.filter(l => s.nodes[l.target].name === n).reduce((a, l) => a + l.value, 0); return ev[0].enc === 1000 && ev[0].charges === 200 && ev[0].cot === 150 && ev[0].prel === 400 && c.total === 750 && c.familles[0].code === 'PREL' && s.totalEnc === 1000 && vers('RETRO') === 200 && vers('COT') === 150 && vers('PREL') === 400 && vers('Reste') === 250; }]
     ];
   },
   run() { return tests.cas().map(([nom, fn]) => { let ok = false, err = null; try { ok = !!fn(); } catch (e) { err = e.message; } return { nom, ok, err }; }); }
 };
 
-if (typeof module !== 'undefined') module.exports = { util, norm, csv, serial, modele, engine, stats, bord, chiffre, coffre, github, tests, CATALOGUE, SEEDS };
+if (typeof module !== 'undefined') module.exports = { util, norm, csv, serial, modele, engine, stats, bord, graphes, catalogue, chiffre, coffre, github, tests, CATALOGUE, CAT, FAMILLES, SEEDS };
 // ============================================================ UI (DOM)
 if (typeof document !== 'undefined') (function () {
 const $ = s => document.querySelector(s);
@@ -1376,7 +1741,7 @@ let machine = localStorage.getItem('budget.machine') || (/iPhone|iPad/.test(UA) 
 const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null, selection: new Set() };
 
 function marquer(nom) { etat.dirty[nom] = true; }
-function toutRendre() { rendreEtat(); rendreOps(); rendreValidation(); rendreRegles(); rendreMensuel(); rendreBord(); majBoutons(); }
+function toutRendre() { rendreEtat(); rendreOps(); rendreValidation(); rendreRegles(); rendreCategories(); rendreMensuel(); rendreBord(); rendreGraphes(); majBoutons(); }
 
 // ---------- stockage : un seul fichier chiffré data/store.json.enc dans le dépôt privé, lu/écrit par l'API GitHub (PC, Mac, téléphone)
 const SYNC_DELAI = 3000, SYNC_RETENTATIVE = 30000;
@@ -1528,7 +1893,7 @@ const store = {
     toast(`Fusionné avec la version ${qui} : ${f.bilan.autre_seul || 0} opération(s), ${f.bilan.regles_autre || 0} règle(s) reprises`, 'ok');
   }
 };
-function recategoriser() { if (!etat.data) return 0; const avantD = JSON.stringify(etat.data.operations), avantR = JSON.stringify([etat.rules.rules, etat.rules.appariements, etat.rules.tiers]); const n = engine.run(etat.data, etat.rules); if (JSON.stringify(etat.data.operations) !== avantD) marquer('data'); if (JSON.stringify([etat.rules.rules, etat.rules.appariements, etat.rules.tiers]) !== avantR) marquer('rules'); return n; }
+function recategoriser() { if (!etat.data) return 0; catalogue.appliquer(etat.rules); const avantD = JSON.stringify(etat.data.operations), avantR = JSON.stringify([etat.rules.rules, etat.rules.appariements, etat.rules.tiers]); const n = engine.run(etat.data, etat.rules); if (JSON.stringify(etat.data.operations) !== avantD) marquer('data'); if (JSON.stringify([etat.rules.rules, etat.rules.appariements, etat.rules.tiers]) !== avantR) marquer('rules'); return n; }
 // après chaque action utilisateur : rendu, enregistrement local, envoi regroupé
 async function sauver() { toutRendre(); if (backendGitHub.pret()) await store.enregistrer(); }
 backendGitHub.onFusion = async (f) => {
@@ -1712,7 +2077,7 @@ function rendreEtat() {
     kv.push(`<span class="muted">règles</span><span>${etat.rules.rules.filter(r => r.source === 'user').length} apprise(s), ${etat.rules.appariements.length} appariement(s)</span>`);
     $('#nav-n').textContent = av; $('#nav-n').classList.toggle('hidden', !av);
     const s = etat.data.soldes || {};
-    kv.push(`<span class="muted">soldes (dernier CSV)</span><span>${['perso', 'pro'].map(c => s[c] ? `${c} ${fmtE(s[c].montant)} au ${s[c].date}` : `${c} —`).join(' · ')}</span>`);
+    kv.push(`<span class="muted">soldes (dernier CSV)</span><span>${['perso', 'pro', ...csv.COMPTES_EPARGNE.filter(c => s[c])].map(c => s[c] ? `${SUPPORTS_LIBELLES[c] || c} ${fmtE(s[c].montant)} au ${s[c].date}` : `${c} —`).join(' · ')}</span>`);
   }
   $('#etat-fichiers').innerHTML = kv.join('');
 }
@@ -1726,7 +2091,7 @@ function rendreOps() {
   const tb = $('#ops tbody');
   if (!etat.data) { tb.innerHTML = ''; $('#ops-count').textContent = ''; return; }
   const fc = $('#f-compte').value, fs = $('#f-statut').value, ft = norm.stripAccents($('#f-texte').value).toUpperCase();
-  let ops = etat.data.operations.filter(o => (!fc || o.compte === fc) && (!fs || o.statut === fs) && (!ft || norm.stripAccents(o.libelle + ' ' + (o.categorie || '')).toUpperCase().includes(ft)));
+  let ops = etat.data.operations.filter(o => (!fc || (fc === 'epargne' ? csv.estEpargne(o.compte) : o.compte === fc)) && (!fs || o.statut === fs) && (!ft || norm.stripAccents(o.libelle + ' ' + (o.categorie || '')).toUpperCase().includes(ft)));
   ops = ops.slice().sort((a, b) => b.date_op.localeCompare(a.date_op) || a.compte.localeCompare(b.compte));
   $('#ops-count').textContent = `(${ops.length} / ${etat.data.operations.length})`;
   const max = 300;
@@ -1739,8 +2104,10 @@ $('#f-compte').onchange = $('#f-statut').onchange = rendreOps; $('#f-texte').oni
 
 // ---------- éditeur de ligne (validation et correction)
 function optionsCat(o, selection) {
-  const groupes = [['Propositions', (o.propositions || []).filter(c => CAT[c])], ['Perso', CATALOGUE.filter(c => c[2] === 'perso').map(c => c[0])], ['Épargne', CATALOGUE.filter(c => c[2] === 'epargne').map(c => c[0])], ['Pro', CATALOGUE.filter(c => c[2] === 'pro').map(c => c[0])]];
+  const vis = (s) => catalogue.visibles(s).concat(selection && CAT[selection] && CAT[selection].sphere === s && CAT[selection].masque ? [selection] : []);
+  const groupes = [['Propositions', (o.propositions || []).filter(c => CAT[c])], ['Perso', vis('perso')], ['Épargne', vis('epargne')], ['Pro', vis('pro')]];
   if (o.compte === 'pro') { const p = groupes.splice(3, 1)[0]; groupes.splice(1, 0, p); }
+  else if (csv.estEpargne(o.compte)) { const p = groupes.splice(2, 1)[0]; groupes.splice(1, 0, p); }
   return groupes.filter(g => g[1].length).map(([nom, codes]) => `<optgroup label="${nom}">${codes.map(c => `<option value="${c}"${c === selection ? ' selected' : ''}>${c} — ${esc(CAT[c].libelle)}</option>`).join('')}</optgroup>`).join('');
 }
 function editeurHtml(o) {
@@ -1860,7 +2227,10 @@ function rendreMensuel() {
   sel.innerHTML = mois.slice().reverse().map(m => `<option${m === moisCourant ? ' selected' : ''}>${m}</option>`).join('') || '<option>—</option>';
   const s = stats.mensuel(etat.data, moisCourant || '');
   $('#m-nice').value = s.doctolib_nice ?? ''; $('#m-ehpad').value = s.doctolib_ehpad ?? ''; $('#m-especes').value = s.especes ?? '';
-  $('#m-la').value = (s.soldes || {}).LA ?? ''; $('#m-lep').value = (s.soldes || {}).LEP ?? ''; $('#m-ldds').value = (s.soldes || {}).LDDS ?? '';
+  const ss = s.soldes || {};
+  $('#m-la').value = ss.LA ?? ''; $('#m-lep').value = ss.LEP ?? ''; $('#m-ldds').value = ss.LDDS ?? ''; $('#m-pea').value = ss.PEA ?? ''; $('#m-av').value = ss.AV ?? ''; $('#m-crypto').value = ss.CRYPTO ?? '';
+  // soldes lus dans les CSV des comptes d'épargne pour ce mois (pas de saisie nécessaire)
+  if (moisCourant) { const p = stats.patrimoine(etat.data), i = p.mois.indexOf(moisCourant); const lus = i >= 0 ? SUPPORTS_PATRIMOINE.filter(k => p.sources[k][i] === 'csv').map(k => `${SUPPORTS_LIBELLES[k]} ${fmtE(p.series[k][i])}`) : []; $('#m-soldes-csv').textContent = lus.length ? 'Lus dans les CSV ce mois-ci : ' + lus.join(' · ') : ''; }
   // ventilation du mois
   if (moisCourant) {
     const ops = stats.opsMois(etat.data, moisCourant).filter(o => o.compte === 'pro');
@@ -1891,7 +2261,7 @@ $('#m-ok').onclick = async () => {
   const num = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v.replace(',', '.')); };
   const m = etat.data.mensuel[moisCourant] || {};
   m.doctolib_nice = num('#m-nice'); m.doctolib_ehpad = num('#m-ehpad'); m.especes = num('#m-especes');
-  m.soldes = { LA: num('#m-la'), LEP: num('#m-lep'), LDDS: num('#m-ldds') };
+  m.soldes = { LA: num('#m-la'), LEP: num('#m-lep'), LDDS: num('#m-ldds'), PEA: num('#m-pea'), AV: num('#m-av'), CRYPTO: num('#m-crypto') };
   if (!m.ifmk) m.ifmk = [];
   etat.data.mensuel[moisCourant] = m;
   stats.poserEspeces(etat.data, moisCourant, m.especes || 0);
@@ -2012,11 +2382,164 @@ $('#b-prov-ok').onclick = async () => {
   etat.rules.config.provisions = pv; marquer('rules'); toast('Taux de provision enregistrés', 'ok'); await sauver();
 };
 
-// ---------- légende
-(function () {
-  const html = Object.entries(FAMILLES).map(([f, nom]) => { const codes = CATALOGUE.filter(c => c[0].split('.')[0] === f); return `<p style="margin:4px 0"><span class="cat">${f}</span> <b>${esc(nom)}</b>${codes.length > 1 || codes[0][0] !== f ? ' — ' + codes.map(c => `<span class="cat" title="${esc(c[1])}">${c[0].includes('.') ? c[0].split('.')[1] : c[0]}</span> ${esc(c[1])}`).join(' · ') : ''}</p>`; }).join('');
+// ---------- graphes (Chart.js + d3-sankey, chargés en différé depuis un CDN ; Méthodo v3 §9.2)
+const PALETTE = ['#2b5db3', '#1d7a4d', '#a46a0b', '#b4342c', '#6b4fa0', '#0f8b8d', '#c2558b', '#5f6f2f', '#8a5a2b', '#3a7bd5', '#7a7a7a', '#d08a2e', '#2e8b57', '#b86b00'];
+const COULEURS_FIXES = { REV: '#1d7a4d', FIX: '#2b5db3', ABO: '#6b4fa0', ALIM: '#a46a0b', MOB: '#0f8b8d', LOIS: '#c2558b', SANTE: '#b4342c', PROJ: '#5f6f2f', NC: '#9a9890', 'Épargne': '#1d7a4d', EPG: '#1d7a4d', Reste: '#c9c7bf', Puisé: '#b4342c', Revenus: '#1f1f1d', Encaissements: '#1f1f1d', HON: '#1d7a4d', ENT: '#2e8b57', RETRO: '#a46a0b', FRAIS: '#2b5db3', DEPL: '#0f8b8d', REPAS: '#c2558b', COT: '#b4342c', PREL: '#6b4fa0', HE: '#9a9890', LA: '#2b5db3', LEP: '#1d7a4d', LDDS: '#0f8b8d', PEA: '#a46a0b', AV: '#6b4fa0', CRYPTO: '#d08a2e' };
+const couleurs = {};
+function couleur(code) { if (COULEURS_FIXES[code]) return COULEURS_FIXES[code]; const fam = String(code).split('.')[0]; if (COULEURS_FIXES[fam] && code !== fam) { const n = Object.keys(couleurs).filter(k => k.startsWith(fam + '.')).length; if (!couleurs[code]) couleurs[code] = teinte(COULEURS_FIXES[fam], n); return couleurs[code]; } if (!couleurs[code]) couleurs[code] = PALETTE[Object.keys(couleurs).length % PALETTE.length]; return couleurs[code]; }
+// déclinaison d'une couleur de famille pour ses sous-catégories (plus claire à chaque rang)
+function teinte(hex, n) { const v = parseInt(hex.slice(1), 16); const r = v >> 16, g = (v >> 8) & 255, b = v & 255; const t = Math.min(0.65, 0.12 * n); const m = c => Math.round(c + (255 - c) * t); return `rgb(${m(r)},${m(g)},${m(b)})`; }
+const charts = {};
+function chart(id, cfg) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } const el = $('#' + id); el.innerHTML = '<canvas></canvas>'; charts[id] = new Chart(el.querySelector('canvas'), cfg); return charts[id]; }
+function videChart(id, msg) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } $('#' + id).innerHTML = `<p class="muted small" style="margin:0">${esc(msg || 'rien sur la période')}</p>`; }
+const grEtat = { onglet: 'perso', mode: 'glissant', valeur: null, famille: { perso: null, pro: null }, detail: null };
+const tipEuro = { callbacks: { label: c => `${c.dataset.label ? c.dataset.label + ' : ' : ''}${fmtE(c.parsed.y ?? c.parsed)}` } };
+const optBarres = (empile, clicMois) => ({ responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { stacked: !!empile, grid: { display: false } }, y: { stacked: !!empile, ticks: { callback: v => v.toLocaleString('fr-FR') } } }, plugins: { legend: { position: 'bottom' }, tooltip: tipEuro }, onClick: clicMois ? (e, els, ch) => { if (els.length) { grEtat.mode = 'mois'; grEtat.valeur = ch.data.labels[els[0].index]; rendreGraphes(); } } : undefined });
+function rendreGraphes() {
+  if (!$('#screen-graphes').classList.contains('on') || !etat.data) return;
+  const libOk = typeof Chart !== 'undefined' && typeof d3 !== 'undefined' && typeof d3.sankey === 'function';
+  $('#gr-indispo').classList.toggle('hidden', libOk);
+  document.querySelectorAll('#gr-onglets button').forEach(b => b.classList.toggle('on', b.dataset.gr === grEtat.onglet));
+  for (const o of ['perso', 'pro', 'patrimoine']) $('#gr-' + o).classList.toggle('hidden', grEtat.onglet !== o);
+  $('#gr-periode').classList.toggle('hidden', grEtat.onglet === 'patrimoine');
+  const annees = graphes.annees(etat.data), mois = stats.mois(etat.data);
+  $('#gr-mode').value = grEtat.mode;
+  const val = $('#gr-valeur');
+  if (grEtat.mode === 'glissant') val.classList.add('hidden');
+  else { val.classList.remove('hidden'); const opts = grEtat.mode === 'annee' ? annees.slice().reverse() : mois.slice().reverse(); if (!opts.includes(grEtat.valeur)) grEtat.valeur = opts[0] || null; val.innerHTML = opts.map(v => `<option${v === grEtat.valeur ? ' selected' : ''}>${v}</option>`).join(''); }
+  if (!libOk || !mois.length) return;
+  const liste = graphes.moisPeriode(etat.data, { mode: grEtat.mode, valeur: grEtat.valeur });
+  const listeEvo = grEtat.mode === 'mois' ? graphes.moisPeriode(etat.data, { mode: 'glissant' }) : liste;
+  if (grEtat.onglet === 'perso') rendreGrPerso(liste, listeEvo); else if (grEtat.onglet === 'pro') rendreGrPro(liste, listeEvo); else rendreGrPatrimoine();
+  rendreGrDetail(liste);
+}
+function detail(compte, code, libelle) { grEtat.detail = { compte, code, libelle }; etat.editionId = null; rendreGraphes(); setTimeout(() => $('#gr-detail-card').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
+// donut familles + barres sous-catégories + légende cliquable (perso et pro partagent la mécanique)
+function rendreFamilles(compte, cats, idDonut, idLegende, idSous, idTitre) {
+  const fams = cats.familles.filter(f => f.montant > 0);
+  if (!fams.length) { videChart(idDonut); videChart(idSous); $('#' + idLegende).innerHTML = ''; $('#' + idTitre).textContent = 'Sous-catégories'; return; }
+  if (!fams.some(f => f.code === grEtat.famille[compte])) grEtat.famille[compte] = fams[0].code;
+  const clic = (code) => { grEtat.famille[compte] = code; rendreGraphes(); };
+  chart(idDonut, { type: 'doughnut', data: { labels: fams.map(f => f.libelle), datasets: [{ data: fams.map(f => f.montant), backgroundColor: fams.map(f => couleur(f.code)), borderWidth: 1 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.label} : ${fmtE(c.parsed)} (${cats.total ? Math.round(c.parsed / cats.total * 100) : 0} %)` } } }, onClick: (e, els) => { if (els.length) clic(fams[els[0].index].code); } } });
+  $('#' + idLegende).innerHTML = fams.map(f => `<span><i style="background:${couleur(f.code)}"></i><button data-code="${f.code}"${f.code === grEtat.famille[compte] ? ' style="font-weight:600"' : ''}>${esc(f.libelle)}</button> <span class="muted">${fmtE(f.montant)}</span></span>`).join('') + `<span class="muted">total ${fmtE(cats.total)}</span>`;
+  $('#' + idLegende).querySelectorAll('button').forEach(b => b.onclick = () => clic(b.dataset.code));
+  const f = fams.find(x => x.code === grEtat.famille[compte]);
+  $('#' + idTitre).innerHTML = `${esc(f.libelle)} <span class="muted small">${fmtE(f.montant)} — <a href="#" id="${idTitre}-all">toutes les lignes</a></span>`;
+  $('#' + idTitre + '-all').onclick = (e) => { e.preventDefault(); detail(compte, f.code, f.libelle); };
+  if (!f.sous.length || (f.sous.length === 1 && f.sous[0].code === f.code)) { videChart(idSous, 'pas de sous-catégorie : clique sur « toutes les lignes »'); return; }
+  const sous = f.sous.slice(0, 14);
+  chart(idSous, { type: 'bar', data: { labels: sous.map(s => s.libelle), datasets: [{ data: sous.map(s => s.montant), backgroundColor: sous.map(s => couleur(s.code)), borderWidth: 0 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { callback: v => v.toLocaleString('fr-FR') } }, y: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtE(c.parsed.x) } } }, onClick: (e, els) => { if (els.length) detail(compte, sous[els[0].index].code, sous[els[0].index].libelle); } } });
+}
+function rendreGrPerso(liste, listeEvo) {
+  const ev = graphes.persoMensuel(etat.data, listeEvo);
+  chart('c-perso-evo', { type: 'bar', data: { labels: ev.map(e => e.mois), datasets: [
+    { label: 'Revenus', data: ev.map(e => e.revenus), backgroundColor: couleur('REV') }, { label: 'Dépenses', data: ev.map(e => e.depenses), backgroundColor: couleur('SANTE') }, { label: 'Épargne', data: ev.map(e => e.epargne), backgroundColor: couleur('FIX') },
+    { label: "Taux d'épargne %", data: ev.map(e => e.taux), type: 'line', yAxisID: 'y2', borderColor: '#1f1f1d', backgroundColor: '#1f1f1d', borderWidth: 2, pointRadius: 3, tension: .2, spanGaps: true }] },
+    options: Object.assign(optBarres(false, true), { scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v.toLocaleString('fr-FR') } }, y2: { position: 'right', min: 0, suggestedMax: 60, grid: { display: false }, ticks: { callback: v => v + ' %' } } }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => c.dataset.yAxisID === 'y2' ? `${c.dataset.label} : ${c.parsed.y === null ? '—' : c.parsed.y + ' %'}` : `${c.dataset.label} : ${fmtE(c.parsed.y)}` } } } }) });
+  rendreFamilles('perso', graphes.persoCategories(etat.data, liste), 'c-perso-fam', 'l-perso-fam', 'c-perso-sous', 't-perso-sous');
+  rendreSankey('s-perso', graphes.sankeyPerso(etat.data, liste), (n) => { const code = n.name === 'Revenus' ? 'REV' : n.name === 'Épargne' ? 'EPG' : n.name === 'REV.NC' ? 'NC' : n.name; if (/^(Reste|Puisé)$/.test(code)) return; detail('perso', code, n.libelle); });
+}
+function rendreGrPro(liste, listeEvo) {
+  const ev = graphes.proMensuel(etat.data, etat.rules, listeEvo);
+  chart('c-pro-evo', { type: 'bar', data: { labels: ev.map(e => e.mois), datasets: [
+    { label: 'Encaissements', data: ev.map(e => e.enc), backgroundColor: couleur('HON') }, { label: "Charges d'exercice", data: ev.map(e => e.charges), backgroundColor: couleur('RETRO') }, { label: 'Cotisations, impôts', data: ev.map(e => e.cot), backgroundColor: couleur('COT') }, { label: 'Versé au perso', data: ev.map(e => e.prel), backgroundColor: couleur('PREL') },
+    { label: 'Solde du mois', data: ev.map(e => e.resultat), type: 'line', borderColor: '#1f1f1d', backgroundColor: '#1f1f1d', borderWidth: 2, pointRadius: 3, tension: .2 }] }, options: optBarres(false, true) });
+  const ent = ['NICE', 'EHPAD', 'REMPLA', 'COMMUN'];
+  chart('c-pro-ent', { type: 'bar', data: { labels: ev.map(e => e.mois), datasets: ent.map((e, i) => ({ label: e === 'COMMUN' ? 'Commun (non ventilé)' : e, data: ev.map(x => x.entites[e]), backgroundColor: ['#1d7a4d', '#2b5db3', '#a46a0b', '#9a9890'][i] })) }, options: optBarres(true, true) });
+  rendreFamilles('pro', graphes.proCategories(etat.data, etat.rules, liste), 'c-pro-fam', 'l-pro-fam', 'c-pro-sous', 't-pro-sous');
+  rendreSankey('s-pro', graphes.sankeyPro(etat.data, etat.rules, liste), (n) => { const code = n.name === 'Encaissements' ? 'ENC' : n.name; if (/^(Reste|Puisé)$/.test(code)) return; detail('pro', code, n.libelle); });
+}
+function rendreSankey(id, s, onClick) {
+  const el = $('#' + id); el.innerHTML = '';
+  if (!s.links.length) { el.innerHTML = '<p class="muted small" style="margin:0">aucun flux sur la période</p>'; return; }
+  const W = Math.max(360, el.clientWidth || 800), H = Math.max(240, Math.min(620, s.nodes.length * 30)), etroit = W < 560;
+  const sk = d3.sankey().nodeWidth(14).nodePadding(etroit ? 8 : 12).nodeSort(null).extent([[1, 6], [W - 1, H - 6]]);
+  const g = sk({ nodes: s.nodes.map(n => Object.assign({}, n)), links: s.links.map(l => Object.assign({}, l)) });
+  const svg = d3.select(el).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('preserveAspectRatio', 'xMinYMin meet');
+  svg.append('g').selectAll('path').data(g.links).join('path').attr('class', 'link').attr('d', d3.sankeyLinkHorizontal()).attr('stroke-width', d => Math.max(1, d.width)).append('title').text(d => `${d.source.libelle} → ${d.target.libelle} : ${fmtE(d.value)}`);
+  const node = svg.append('g').selectAll('g').data(g.nodes).join('g').attr('class', 'node');
+  node.append('rect').attr('x', d => d.x0).attr('y', d => d.y0).attr('height', d => Math.max(1, d.y1 - d.y0)).attr('width', d => d.x1 - d.x0).attr('fill', d => couleur(d.name)).on('click', (e, d) => onClick(d)).append('title').text(d => `${d.libelle} : ${fmtE(d.value)} — clique pour les lignes`);
+  node.append('text').attr('x', d => d.x0 < W / 2 ? d.x1 + 6 : d.x0 - 6).attr('y', d => (d.y1 + d.y0) / 2).attr('dy', '0.35em').attr('text-anchor', d => d.x0 < W / 2 ? 'start' : 'end').text(d => `${etroit && d.libelle.length > 18 ? d.libelle.slice(0, 17) + '…' : d.libelle} ${fmtE(d.value)}`);
+  el.insertAdjacentHTML('beforeend', `<p class="small muted" style="margin:6px 0 0">Entrées ${fmtE(s.totalRev ?? s.totalEnc)} · ${s.reste >= 0 ? 'reste' : 'puisé dans le solde'} ${fmtE(Math.abs(s.reste))}</p>`);
+}
+function rendreGrPatrimoine() {
+  const p = stats.patrimoine(etat.data);
+  const sup = SUPPORTS_PATRIMOINE.filter(k => p.series[k] && p.series[k].some(v => v !== null));
+  if (!sup.length) { videChart('c-patri', 'aucun solde connu : importe les CSV des livrets / PEA, ou saisis les soldes dans Mois'); $('#t-patri').innerHTML = ''; return; }
+  chart('c-patri', { type: 'bar', data: { labels: p.mois, datasets: sup.map(k => ({ label: SUPPORTS_LIBELLES[k], data: p.series[k], backgroundColor: couleur(k) })) },
+    options: Object.assign(optBarres(true, false), { plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => { const k = sup[c.datasetIndex]; const src = p.sources[k][c.dataIndex]; return `${c.dataset.label} : ${fmtE(c.parsed.y)}${src === 'report' ? ' (reporté)' : src === 'versements' ? ' (cumul des versements)' : src === 'saisie' ? ' (saisi)' : ''}`; }, footer: items => 'Total ' + fmtE(items.reduce((s, i) => s + (i.parsed.y || 0), 0)) } } } }) });
+  const srcLib = { csv: 'CSV du compte', saisie: 'saisi dans Mois', report: 'reporté (dernier connu)', versements: 'cumul des versements (pas de valorisation saisie)' };
+  let total = 0;
+  $('#t-patri').innerHTML = `<table><thead><tr><th>Support</th><th style="text-align:right">Montant</th><th>Mois</th><th>Source</th></tr></thead><tbody>${SUPPORTS_PATRIMOINE.map(k => { const d = p.dernier[k]; if (d) total += d.montant; return `<tr><td><i class="puce" style="background:${couleur(k)}"></i>${SUPPORTS_LIBELLES[k]}</td><td class="num">${d ? fmtE(d.montant) : '—'}</td><td class="muted">${d ? d.mois : ''}</td><td class="small muted">${d ? srcLib[d.source] : 'inconnu : CSV ou saisie dans Mois'}</td></tr>`; }).join('')}<tr style="font-weight:600;background:#fafaf7"><td>Total connu</td><td class="num">${fmtE(Math.round(total * 100) / 100)}</td><td></td><td class="small muted">hors comptes courants</td></tr></tbody></table>`;
+}
+function rendreGrDetail(liste) {
+  const card = $('#gr-detail-card'), d = grEtat.detail;
+  card.classList.toggle('hidden', !d);
+  if (!d) return;
+  const ops = graphes.lignes(etat.data, d.compte, liste, d.code);
+  const max = 200;
+  $('#gr-detail-titre').innerHTML = `${esc(d.libelle)} <span class="muted small">${d.compte} · ${esc(graphes.libellePeriode({ mode: grEtat.mode, valeur: grEtat.valeur }))} · ${ops.length} ligne(s) · ${fmtE(Math.round(ops.reduce((s, o) => s + o.montant, 0) * 100) / 100)}</span>`;
+  const tb = $('#gr-detail tbody');
+  tb.innerHTML = ops.slice(0, max).map(o => `<tr class="clic" data-id="${o.id}"><td>${o.date_op}</td><td>${esc(o.libelle)}${o.annotation.tiers ? `<br><span class="muted small">${esc(o.annotation.tiers)}</span>` : ''}</td><td>${catHtml(o)}</td><td><span class="badge ${o.statut === 'a_valider' ? 'warn' : o.statut === 'valide' ? 'ok' : 'gris'}">${o.statut === 'a_valider' ? 'à valider' : o.statut}</span></td><td class="num ${o.montant < 0 ? 'neg' : 'pos'}">${util.montantFr(o.montant)}</td></tr>${etat.editionId === o.id ? `<tr><td colspan="5">${editeurHtml(o)}</td></tr>` : ''}`).join('') || '<tr><td colspan="5" class="muted">aucune ligne</td></tr>';
+  $('#gr-detail-more').textContent = ops.length > max ? `${ops.length - max} ligne(s) non affichée(s) : réduis la période.` : '';
+  tb.querySelectorAll('tr.clic').forEach(tr => tr.onclick = () => { etat.editionId = etat.editionId === tr.dataset.id ? null : tr.dataset.id; rendreGrDetail(liste); });
+  brancherEditeur(tb);
+}
+document.querySelectorAll('#gr-onglets button').forEach(b => b.onclick = () => { grEtat.onglet = b.dataset.gr; grEtat.detail = null; rendreGraphes(); });
+$('#gr-mode').onchange = () => { grEtat.mode = $('#gr-mode').value; grEtat.valeur = null; rendreGraphes(); };
+$('#gr-valeur').onchange = () => { grEtat.valeur = $('#gr-valeur').value; rendreGraphes(); };
+$('#gr-detail-fermer').onclick = () => { grEtat.detail = null; etat.editionId = null; rendreGraphes(); };
+$('#gr-detail-cats').onclick = () => { montrerEcran('avance'); setTimeout(() => $('#card-categories').scrollIntoView({ behavior: 'smooth' }), 50); };
+window.addEventListener('resize', () => { if ($('#screen-graphes').classList.contains('on')) { clearTimeout(window._grResize); window._grResize = setTimeout(rendreGraphes, 250); } });
+
+// ---------- légende (recalculée avec le catalogue de l'utilisateur)
+function rendreLegende() {
+  const html = Object.entries(FAMILLES).map(([f, nom]) => { const codes = CATALOGUE.filter(c => c[0].split('.')[0] === f && !CAT[c[0]].masque); if (!codes.length) return ''; return `<p style="margin:4px 0"><span class="cat">${f}</span> <b>${esc(nom)}</b>${codes.length > 1 || codes[0][0] !== f ? ' — ' + codes.map(c => `<span class="cat" title="${esc(c[1])}">${c[0].includes('.') ? c[0].split('.')[1] : c[0]}</span> ${esc(c[1])}`).join(' · ') : ''}</p>`; }).join('');
   $('#legende-1').innerHTML = html;
-})();
+}
+rendreLegende();
+
+// ---------- catégories : ajout, renommage, masquage, fusion (Méthodo v3 §2.11)
+function rendreCategories() {
+  rendreLegende();
+  if (!etat.rules) { $('#categories tbody').innerHTML = ''; return; }
+  const sph = $('#cat-sphere').value, ft = norm.stripAccents($('#cat-filtre').value).toUpperCase(), voirMasq = $('#cat-masquees').checked;
+  const nb = {}; for (const o of etat.data.operations) if (o.categorie) nb[o.categorie] = (nb[o.categorie] || 0) + 1;
+  const liste = CATALOGUE.filter(c => (!sph || c[2] === sph) && (voirMasq || !CAT[c[0]].masque) && (!ft || norm.stripAccents(c[0] + ' ' + c[1] + ' ' + (FAMILLES[c[0].split('.')[0]] || '')).toUpperCase().includes(ft)));
+  $('#cat-count').textContent = `(${liste.length})`;
+  const optCible = (code) => `<option value="">—</option>` + CATALOGUE.filter(c => c[0] !== code && !CAT[c[0]].masque && c[2] === CAT[code].sphere).map(c => `<option value="${c[0]}">${c[0]} — ${esc(c[1])}</option>`).join('');
+  let famPrec = null;
+  $('#categories tbody').innerHTML = liste.map(c => {
+    const code = c[0], fam = code.split('.')[0], masque = CAT[code].masque, premiere = fam !== famPrec; famPrec = fam;
+    return `<tr data-code="${code}"${masque ? ' style="opacity:.55"' : ''}><td>${premiere ? `<span class="cat">${fam}</span> <input type="text" class="c-fam" value="${esc(FAMILLES[fam] || fam)}" style="width:150px" title="libellé de la famille">` : ''}</td><td><span class="cat">${code}</span></td><td><input type="text" class="c-lib" value="${esc(c[1])}" style="width:220px"></td><td class="muted">${c[2]}</td><td class="num">${nb[code] || 0}</td><td><input type="checkbox" class="c-vis"${masque ? '' : ' checked'} title="décoché = masqué dans les sélecteurs, les lignes existantes restent"></td><td><select class="c-fus">${optCible(code)}</select> <button class="b small c-fus-ok">Fusionner</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="muted">aucune</td></tr>';
+  const fus = etat.rules.catalogue && etat.rules.catalogue.fusions || [];
+  $('#cat-fusions').innerHTML = fus.length ? fus.slice().reverse().map(f => `<p style="margin:2px 0">${f.date} : <span class="cat">${esc(f.de)}</span> → <span class="cat">${esc(f.vers)}</span> (${f.lignes} ligne(s))</p>`).join('') : '<p class="muted">aucune</p>';
+  $('#categories tbody').querySelectorAll('tr[data-code]').forEach(tr => {
+    const code = tr.dataset.code;
+    const lib = tr.querySelector('.c-lib'); lib.onchange = async () => { try { catalogue.renommer(etat.rules, code, lib.value); marquer('rules'); toast(`${code} : « ${lib.value.trim()} »`, 'ok'); await sauver(); } catch (e) { toast(e.message, 'bad'); } };
+    const fam = tr.querySelector('.c-fam'); if (fam) fam.onchange = async () => { try { catalogue.renommer(etat.rules, code, '', fam.value); marquer('rules'); await sauver(); } catch (e) { toast(e.message, 'bad'); } };
+    tr.querySelector('.c-vis').onchange = async (e) => { catalogue.masquer(etat.rules, code, !e.target.checked); marquer('rules'); await sauver(); };
+    tr.querySelector('.c-fus-ok').onclick = async () => {
+      const vers = tr.querySelector('.c-fus').value; if (!vers) { toast('Choisis la catégorie cible', 'bad'); return; }
+      const n = catalogue.nbLignes(etat.data, code);
+      if (!confirm(`Fusionner ${code} dans ${vers} ?\n${n} ligne(s), les règles, tiers et cibles passent dans ${vers} ; ${code} est masqué. Irréversible (sauf refusion inverse ligne à ligne).`)) return;
+      try { const k = catalogue.fusionner(etat.rules, etat.data, code, vers); marquer('rules'); marquer('data'); recategoriser(); toast(`${code} → ${vers} : ${k} ligne(s)`, 'ok'); await sauver(); } catch (e) { toast(e.message, 'bad'); }
+    };
+  });
+}
+$('#cat-sphere').onchange = $('#cat-masquees').onchange = rendreCategories; $('#cat-filtre').oninput = rendreCategories;
+$('#cat-new-ok').onclick = async () => {
+  if (!etat.rules) return;
+  try {
+    const code = $('#cat-new-code').value.trim().toUpperCase();
+    catalogue.ajouter(etat.rules, code, $('#cat-new-lib').value, $('#cat-new-sphere').value, $('#cat-new-fam').value);
+    marquer('rules'); $('#cat-new-code').value = ''; $('#cat-new-lib').value = ''; $('#cat-new-fam').value = '';
+    toast(`Catégorie ${code} ajoutée`, 'ok'); await sauver();
+  } catch (e) { toast(e.message, 'bad'); }
+};
 
 // ---------- navigation, tests
 document.querySelectorAll('#nav button').forEach(b => b.onclick = () => montrerEcran(b.dataset.screen));
