@@ -232,6 +232,10 @@ input,select,textarea{max-width:100%}
     <h2>Pro ce mois</h2>
     <div class="chiffres" id="ac-pro"></div>
   </div>
+  <div class="card" id="ac-invest-card">
+    <h2 title="PEA, assurance-vie, crypto : ce que tu as investi, ce que ça vaut aux derniers fichiers importés">Investissements</h2>
+    <div class="chiffres" id="ac-invest"></div>
+  </div>
   <div class="card">
     <h2>6 derniers mois</h2>
     <div class="chart" id="c-accueil" style="height:220px"></div>
@@ -269,7 +273,7 @@ input,select,textarea{max-width:100%}
       <label class="small"><input type="checkbox" id="f-aconfirmer"> à confirmer seulement</label>
       <span class="muted small" id="ops-count" style="margin-left:auto"></span>
     </div>
-    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse ici les CSV Bourso et l'Excel Linxea</div>
+    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse ici les CSV Bourso, l'export Bitstack et l'Excel Linxea</div>
     <div id="import-resultat"></div>
     <div class="kv small" style="margin-top:6px" id="etat-fichiers"></div>
   </div>
@@ -281,6 +285,12 @@ input,select,textarea{max-width:100%}
     <div class="card"><h2 title="Soldes lus dans le dernier CSV importé de chaque compte">Comptes courants</h2><div id="k-courants"></div></div>
     <div class="card"><h2 title="Livret A, LEP, LDDS, PEA : solde lu dans leur CSV ou saisi ; assurance-vie et crypto : valorisation saisie, sinon cumul des versements">Patrimoine</h2><div id="t-patri"></div></div>
     <div class="card large"><h2>Patrimoine dans le temps</h2><div class="chart haut" id="c-patri"></div></div>
+    <div class="card large"><div class="row" style="justify-content:space-between"><h2 style="margin:0" title="Investi = prix de revient des positions importées (PEA : PRU × parts, Linxea : PRU × parts, Bitstack : euros envoyés + frais), sinon cumul des versements ; valeur = dernière valorisation importée ou saisie">Performance des investissements</h2><span class="small muted" id="k-perf-date"></span></div><div class="chiffres" id="k-perf" style="margin-top:8px"></div><div id="t-perf" style="margin-top:8px"></div><div class="chart" id="c-perf" style="height:220px;margin-top:8px"></div></div>
+    <div class="card large" id="k-crypto-card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0" title="Depuis l'export de transactions Bitstack (Opérations › Importer) : quantité détenue, euros investis, dernier cours du fichier">Crypto</h2><span class="small muted" id="k-crypto-date"></span></div>
+      <div id="t-crypto" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:8px"><button class="b small" id="k-btc-cours" title="Cours BTC/EUR en direct (CoinGecko, sans compte)">Cours du jour</button><span class="small muted" id="k-btc-info"></span><button class="b small primary hidden" id="k-btc-ok">Enregistrer comme valorisation du mois</button></div>
+    </div>
     <div class="card large"><h2 title="Livrets au dernier solde, PEA et assurance-vie par support importé, crypto à la dernière valorisation">Répartition globale</h2><div id="t-globale"></div></div>
     <div class="card large" id="k-av-card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0" title="Depuis l'export Excel Linxea (Opérations › Importer)">Assurance-vie — répartition</h2><span class="small muted" id="k-av-date"></span></div>
@@ -459,7 +469,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.3';
+const APP_VERSION = '0.9.4';
 const SCHEMA = 1;
 
 const util = {
@@ -521,14 +531,15 @@ const norm = {
 
 // ---------------------------------------------------------- csv
 const csv = {
-  parse(text) {
+  parse(text, sep) {
     text = String(text).replace(/^﻿/, '');
+    if (!sep) { const l1 = text.split(/\r?\n/)[0] || ''; sep = (l1.match(/;/g) || []).length >= (l1.match(/,/g) || []).length ? ';' : ','; }
     const rows = []; let row = [], field = '', q = false;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
       if (q) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += c; }
       else if (c === '"') q = true;
-      else if (c === ';') { row.push(field); field = ''; }
+      else if (c === sep) { row.push(field); field = ''; }
       else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
       else if (c !== '\r') field += c;
     }
@@ -559,11 +570,34 @@ const csv = {
   ],
   entetePositions(rows) { return (rows[0] || []).map(x => norm.stripAccents(String(x ?? '')).trim().toLowerCase()); },
   formatPositions(rows) { const h = csv.entetePositions(rows); return csv.FORMATS_POSITIONS.find(f => f.cles.every(k => h.includes(k))) || null; },
-  estPositions(rows) { return !!csv.formatPositions(rows); },
+  estPositions(rows) { return !!csv.formatPositions(rows) || csv.estBitstack(rows); },
+  // Export de transactions Bitstack (v0.9.4) : Type,Date,…,Montant reçu,Monnaie ou jeton reçu,Montant envoyé,Monnaie ou jeton envoyé,Frais,…,Prix du jeton…
+  // → quantité détenue par jeton (reçu − envoyé − frais en jeton), euros investis (envoyés + frais en euros, dépôts crypto au cours du jour), dernier cours connu.
+  // Adresses, hash et identifiants ne sont jamais conservés.
+  estBitstack(rows) { const h = csv.entetePositions(rows); return h.includes('monnaie ou jeton recu') && h.includes('montant recu'); },
+  toCrypto(rows, nomFichier) {
+    const h = csv.entetePositions(rows); const col = (n) => h.indexOf(n); const v = (r, n) => { const i = col(n); return i >= 0 ? String(r[i] ?? '').trim() : ''; }; const num = (x) => { const t = x.replace(',', '.'); const n = Number(t); return t !== '' && Number.isFinite(n) ? n : null; };
+    const jetons = {}; let dateMax = null; let lues = 0;
+    const J = (k) => jetons[k] || (jetons[k] = { jeton: k, quantite: 0, investi: 0, cours: null, dateCours: null, achats: 0, depots: 0 });
+    for (const r of rows.slice(1)) {
+      const date = v(r, 'date').slice(0, 10); if (!/^\d{4}-\d\d-\d\d$/.test(date)) continue;
+      lues++; if (!dateMax || date > dateMax) dateMax = date;
+      const recuQ = num(v(r, 'montant recu')), recuJ = v(r, 'monnaie ou jeton recu').toUpperCase(), envQ = num(v(r, 'montant envoye')), envJ = v(r, 'monnaie ou jeton envoye').toUpperCase(), fraisQ = num(v(r, 'frais')), fraisJ = v(r, 'monnaie ou jeton des frais').toUpperCase();
+      const prixRecu = num(v(r, 'prix du jeton du montant recu')), prixEnv = num(v(r, 'prix du jeton du montant envoye'));
+      if (recuJ && recuJ !== 'EUR' && recuQ) { const j = J(recuJ); j.quantite += recuQ; if (prixRecu && (!j.dateCours || date >= j.dateCours)) { j.cours = prixRecu; j.dateCours = date; }
+        if (envJ === 'EUR' && envQ) { j.investi += envQ; j.achats++; } else if (!envJ && prixRecu) { j.investi += recuQ * prixRecu; j.depots++; } }
+      if (envJ && envJ !== 'EUR' && envQ) { const j = J(envJ); j.quantite -= envQ; if (prixEnv && (!j.dateCours || date >= j.dateCours)) { j.cours = prixEnv; j.dateCours = date; } if (recuJ === 'EUR' && recuQ) j.investi -= recuQ; }
+      if (fraisJ && fraisQ) { if (fraisJ === 'EUR') { if (recuJ && recuJ !== 'EUR') J(recuJ).investi += fraisQ; } else J(fraisJ).quantite -= fraisQ; }
+    }
+    const positions = Object.values(jetons).filter(j => j.quantite > 1e-12).map(j => ({ isin: j.jeton, nom: j.jeton === 'BTC' ? 'Bitcoin' : j.jeton, quantite: Math.round(j.quantite * 1e8) / 1e8, cours: j.cours, dateCours: j.dateCours, pru: j.quantite ? Math.round(j.investi / j.quantite * 100) / 100 : null, investi: Math.round(j.investi * 100) / 100, montant: Math.round(j.quantite * (j.cours || 0) * 100) / 100, achats: j.achats, depots: j.depots }));
+    const res = { fichier: nomFichier, type: 'positions', support: 'CRYPTO', date: dateMax || csv.datePositions(nomFichier), positions, total: Math.round(positions.reduce((s, p) => s + p.montant, 0) * 100) / 100, investi: Math.round(positions.reduce((s, p) => s + p.investi, 0) * 100) / 100, erreurs: [], lues };
+    return res;
+  },
   datePositions(nomFichier) { let m = /(\d\d)-(\d\d)-(\d{4})/.exec(nomFichier || ''); if (m) return `${m[3]}-${m[2]}-${m[1]}`; m = /(\d{4})-(\d\d)-(\d\d)/.exec(nomFichier || ''); return m ? m[0] : util.nowIso().slice(0, 10); },
   dateFr(v) { if (!v) return null; if (v instanceof Date) return v.toISOString().slice(0, 10); const m = /^(\d\d)\/(\d\d)\/(\d{4})/.exec(String(v).trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : (/^\d{4}-\d\d-\d\d/.test(String(v)) ? String(v).slice(0, 10) : null); },
   nombre(v) { if (typeof v === 'number') return Number.isFinite(v) ? v : null; return csv.montant(String(v ?? '').replace(/\s*%$/, '')); },
   toPositions(rows, nomFichier) {
+    if (csv.estBitstack(rows)) return csv.toCrypto(rows, nomFichier);
     const f = csv.formatPositions(rows); const h = csv.entetePositions(rows); const col = (n) => n ? h.indexOf(n) : -1; const lire = (r, n) => { const i = col(n); return i >= 0 ? r[i] : null; };
     const res = { fichier: nomFichier, type: 'positions', support: f.support, date: csv.datePositions(nomFichier), positions: [], total: 0, erreurs: [], lues: 0 };
     let dateMax = null;
@@ -890,7 +924,7 @@ const modele = {
   poserPositions(data, p) {
     if (!data.positions) data.positions = {};
     if (!data.positions[p.support]) data.positions[p.support] = {};
-    data.positions[p.support][p.date] = { total: p.total, positions: p.positions.map(x => Object.assign({}, x)) };
+    data.positions[p.support][p.date] = { total: p.total, positions: p.positions.map(x => Object.assign({}, x)), investi: p.investi ?? null };
     const m = util.mois(p.date); if (!data.mensuel[m]) data.mensuel[m] = { doctolib_nice: null, doctolib_ehpad: null, especes: null, soldes: {} };
     if (!data.mensuel[m].soldes) data.mensuel[m].soldes = {};
     // la valorisation la plus récente du mois gagne
@@ -1570,6 +1604,7 @@ const ETF_REF = {
   'LU1681045370': { nom: 'Amundi MSCI Emerging Markets', indice: 'MSCI Emerging Markets', classe: 'Actions', date: '2026-09-30', source: 'MSCI, factsheet MSCI Emerging Markets Index', pays: { 'Taïwan': 28.94, 'Corée du Sud': 21.4, 'Chine': 19.8, 'Inde': 10.65, 'Brésil': 4.09, 'Autres pays émergents': 15.12 } },
   'LU1681048804': { nom: 'Amundi S&P 500', indice: 'S&P 500', classe: 'Actions', date: '2026-10-26', source: 'indice 100 % États-Unis par construction', pays: { 'États-Unis': 100 } },
   'LU1832174962': { nom: 'Indépendance AM Europe Small', indice: 'gestion active, petites et moyennes capitalisations Europe hors UK (classification Linxea)', classe: 'Actions', date: '2026-10-26', source: 'catégorie Linxea « Actions Europe hors UK Petites & Moy. Cap. »', pays: { 'Europe hors Royaume-Uni': 100 } },
+  'BTC': { nom: 'Bitcoin', indice: 'BTC/EUR', classe: 'Crypto', date: '2026-10-26', source: 'Bitstack', pays: { 'Bitcoin (sans pays)': 100 } },
   'FONDSEURNG': { nom: 'Fonds euros Spirica Nouvelle Génération', indice: 'fonds en euros (capital garanti)', classe: 'Fonds euros', date: '2026-10-26', source: 'Linxea', pays: { 'Fonds en euros': 100 } }
 };
 const diversification = {
@@ -1596,6 +1631,39 @@ const diversification = {
     if (inconnu > 0) listePays.push({ pays: 'Non renseigné', montant: Math.round(inconnu * 100) / 100, part: Math.round(inconnu / d.total * 1000) / 10 });
     const dates = [...new Set(parETF.map(e => (diversification.ref(rules, e.isin) || {}).date).filter(Boolean))].sort();
     return { date: d.date, total: d.total, parETF, pays: listePays, inconnus: parETF.filter(e => !e.connu).map(e => e.isin), dateRef: dates[dates.length - 1] || null };
+  }
+};
+
+// Performance par support (v0.9.4) : investi = prix de revient des positions (PEA, AV : PRU × parts ; crypto : euros envoyés + frais), à défaut cumul des
+// versements EPG.* depuis le perso ; valeur = dernière valorisation connue ; gain = valeur − investi. Sans cours en direct pour les ETF : la valeur a l'âge du dernier fichier.
+const performance = {
+  support(data, rules, k) {
+    const pat = stats.patrimoine(data); const d = pat.dernier[k]; if (!d) return null;
+    const pos = modele.dernieresPositions(data, k);
+    let investi = null, source = 'versements';
+    if (pos && pos.investi !== null && pos.investi !== undefined) { investi = pos.investi; source = 'fichier'; }
+    else if (pos && pos.positions.every(x => x.pru !== null && x.pru !== undefined && x.quantite)) { investi = Math.round(pos.positions.reduce((s, x) => s + x.pru * x.quantite, 0) * 100) / 100; source = 'pru'; }
+    else { const code = { PEA: 'EPG.PEA', AV: 'EPG.AV', CRYPTO: 'EPG.CRYPTO' }[k]; if (!code) return null; investi = Math.round(data.operations.filter(o => o.compte === 'perso' && o.categorie === code && o.montant < 0).reduce((s, o) => s - o.montant, 0) * 100) / 100; }
+    const valeur = d.montant, gain = Math.round((valeur - investi) * 100) / 100;
+    return { support: k, investi, valeur, gain, pct: investi ? Math.round(gain / investi * 1000) / 10 : null, date: pos ? pos.date : d.mois, source, valeurSource: d.source };
+  },
+  tous(data, rules) {
+    const l = ['PEA', 'AV', 'CRYPTO'].map(k => performance.support(data, rules, k)).filter(Boolean);
+    const investi = Math.round(l.reduce((s, x) => s + x.investi, 0) * 100) / 100, valeur = Math.round(l.reduce((s, x) => s + x.valeur, 0) * 100) / 100;
+    return { supports: l, investi, valeur, gain: Math.round((valeur - investi) * 100) / 100, pct: investi ? Math.round((valeur - investi) / investi * 1000) / 10 : null };
+  },
+  // courbe : valeur totale des supports investis (PEA + AV + crypto) et cumul des versements depuis le perso, par mois
+  courbe(data) {
+    const pat = stats.patrimoine(data); const codes = { PEA: 'EPG.PEA', AV: 'EPG.AV', CRYPTO: 'EPG.CRYPTO' };
+    let cumul = 0; const valeur = [], verse = [];
+    for (let i = 0; i < pat.mois.length; i++) {
+      const m = pat.mois[i];
+      for (const o of data.operations) if (o.compte === 'perso' && o.montant < 0 && util.mois(o.date_op) === m && Object.values(codes).includes(o.categorie)) cumul += -o.montant;
+      verse.push(Math.round(cumul * 100) / 100);
+      let v = 0, un = false; for (const k of Object.keys(codes)) { const x = pat.series[k][i]; if (x !== null && pat.sources[k][i] !== 'versements') { v += x; un = true; } }
+      valeur.push(un ? Math.round(v * 100) / 100 : null);
+    }
+    return { mois: pat.mois, valeur, verse };
   }
 };
 
@@ -1963,6 +2031,9 @@ const tests = {
       ['catalogue : ordre personnalisé des familles et des codes, déplacement ▲▼, respecté par CATALOGUE', () => { const r = modele.rulesDefaut('T'); const f0 = catalogue.famillesOrdonnees(r, 'perso'); catalogue.deplacerFamille(r, 'ALIM', -2, 'perso'); catalogue.appliquer(r); const f1 = catalogue.famillesOrdonnees(r, 'perso'); const c0 = catalogue.codesOrdonnes(r, 'ALIM'); catalogue.deplacerCode(r, 'ALIM.CAFE', -2); catalogue.appliquer(r); const c1 = catalogue.codesOrdonnes(r, 'ALIM'); const visibles = catalogue.visibles('perso'); const ok = f0.indexOf('ALIM') === 3 && f1.indexOf('ALIM') === 1 && c0[0] === 'ALIM.COURSES' && c1[0] === 'ALIM.CAFE' && visibles.indexOf('ALIM.CAFE') < visibles.indexOf('ALIM.COURSES') && !catalogue.deplacerCode(r, 'ALIM.CAFE', -1); catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
       ['catalogue : changer une catégorie de famille = nouveau code + fusion ; icône de famille personnalisable', () => { const j = jeu([ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P)]); const nv = catalogue.changerFamille(j.r, j.d, 'ALIM.RESTO', 'LOIS'); engine.run(j.d, j.r); catalogue.icone_set(j.r, 'LOIS', '🎸'); const ok = nv === 'LOIS.RESTO' && CAT['LOIS.RESTO'].libelle === 'Restaurants, livraison' && j.d.operations[0].categorie === 'LOIS.RESTO' && CAT['ALIM.RESTO'].masque && catalogue.icone(j.r, 'LOIS') === '🎸' && catalogue.icone(j.r, 'ALIM') === '🛒'; catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
       ['positions Linxea (Excel → lignes) : format reconnu, date de la colonne Date, classe fonds euro / actions, contrat et titulaire ignorés, répartition globale', () => { const rows = [['Placement', 'N° Contrat', 'Titulaire 1', 'Titulaire 2', 'Produit', 'Catégorie', 'Sous-catégorie', 'Nom du support', 'ISIN', 'Nbre de parts', 'Dernière cotation', 'Date', 'Somme en Compte', 'Plus ou Moins Value', 'Prix de Revient Moyen', 'Perf.% Deb. année'], ['Assurance vie', '123', 'X Y', '', 'Linxea Spirit 2', 'Fonds Actions', 'Actions Amérique', 'Amundi S&P 500', 'LU1681048804', '1.5', 100, '23/10/2026', 150, 10, 90, '17,5 %'], ['Assurance vie', '123', 'X Y', '', 'Linxea Spirit 2', 'Fonds Euro', 'Fonds Euros', 'Fonds en euros Spirica', 'FONDSEURNG', '0', 1, '25/10/2026', 850, 0, 0, '']]; const f = csv.formatPositions(rows); const p = csv.toPositions(rows, 'Linxea_donnes-financieres_abc_2026-10-26-export.xlsx'); const d = modele.dataDefaut('T'); modele.poserPositions(d, p); const r = diversification.calculer(d, modele.rulesDefaut('T'), 'AV'); const g = diversification.globale(d, modele.rulesDefaut('T')); return f.support === 'AV' && p.date === '2026-10-26' && p.total === 1000 && p.positions.length === 2 && !JSON.stringify(p).includes('123') && !JSON.stringify(p).includes('X Y') && p.positions[1].classe === 'Fonds Euro' && d.mensuel['2026-10'].soldes.AV === 1000 && r.parETF[0].classe === 'Fonds euros' && r.pays.find(x => x.pays === 'États-Unis').part === 15 && g.classes.find(c => c.classe === 'Fonds euros').montant === 850 && g.classes.find(c => c.classe === 'Actions').montant === 150 && g.total === 1000; }],
+      ['csv : séparateur détecté (virgule pour Bitstack, point-virgule pour Bourso)', () => eq(csv.parse('a,b,"c,d"\n1,2,3'), [['a', 'b', 'c,d'], ['1', '2', '3']]) && eq(csv.parse('a;b\n1;2'), [['a', 'b'], ['1', '2']])],
+      ['Bitstack : transactions → quantité détenue, investi (euros + frais, dépôts crypto au cours du jour), dernier cours, valorisation ; sans adresse ni hash', () => { const txt = 'Type,Date,Fuseau horaire,Montant reçu,Monnaie ou jeton reçu,Montant envoyé,Monnaie ou jeton envoyé,Frais,Monnaie ou jeton des frais,Description,Prix du jeton du montant envoyé,Prix du jeton du montant recu,Prix du jeton des frais,Adresse,Transaction hash,ID Externe\nÉchange,2026-10-18T14:33:05Z,GMT,0.0002,BTC,10,EUR,0.2,EUR,Achat par carte,,50000,,,,id1\nÉchange,2026-10-11T14:33:04Z,GMT,0.0001,BTC,4,EUR,0.1,EUR,Achat par carte,,40000,,,,id2\nDépôt,2026-06-28T15:45:32Z,GMT,0.001,BTC,,,,,Dépôt (Crypto),,30000,,bc1qxxx,hashxxx,id3\n'; const rows = csv.parse(txt); const ok0 = csv.estPositions(rows) && csv.estBitstack(rows); const p = csv.toPositions(rows, 'transactions-x.csv'); const b = p.positions[0]; const d = modele.dataDefaut('T'); modele.poserPositions(d, p); const perf = performance.support(d, modele.rulesDefaut('T'), 'CRYPTO'); return ok0 && p.support === 'CRYPTO' && p.date === '2026-10-18' && b.isin === 'BTC' && Math.abs(b.quantite - 0.0013) < 1e-9 && b.investi === 44.3 && b.cours === 50000 && b.montant === 65 && p.total === 65 && !JSON.stringify(p).includes('bc1q') && !JSON.stringify(p).includes('hashxxx') && !JSON.stringify(p).includes('id1') && d.mensuel['2026-10'].soldes.CRYPTO === 65 && perf.investi === 44.3 && perf.valeur === 65 && perf.gain === 20.7 && perf.source === 'fichier'; }],
+      ['performance : PEA depuis PRU × parts, AV depuis le fichier, total et courbe valeur / versé', () => { const d = modele.dataDefaut('T'); modele.poserPositions(d, { support: 'PEA', date: '2026-10-26', total: 1300, positions: [{ isin: 'IE0002XZSHO1', nom: 'W', montant: 1300, quantite: 10, pru: 100 }] }); const j = jeu([ligne('2026-09-09', 'VIR Virement vers PEA', '-500,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); d.operations = j.d.operations; const r = modele.rulesDefaut('T'); const pea = performance.support(d, r, 'PEA'); const t = performance.tous(d, r); const c = performance.courbe(d); return pea.investi === 1000 && pea.source === 'pru' && pea.gain === 300 && pea.pct === 30 && t.supports.length === 1 && t.gain === 300 && c.mois.join() === '2026-09,2026-10' && c.verse.join() === '500,1000' && c.valeur[1] === 1300; }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
@@ -1977,7 +2048,7 @@ const tests = {
   run() { return tests.cas().map(([nom, fn]) => { let ok = false, err = null; try { ok = !!fn(); } catch (e) { err = e.message; } return { nom, ok, err }; }); }
 };
 
-if (typeof module !== 'undefined') module.exports = { util, norm, csv, serial, modele, engine, stats, bord, graphes, catalogue, diversification, ETF_REF, chiffre, coffre, github, tests, CATALOGUE, CAT, FAMILLES, SEEDS };
+if (typeof module !== 'undefined') module.exports = { util, norm, csv, serial, modele, engine, stats, bord, graphes, catalogue, diversification, performance, ETF_REF, chiffre, coffre, github, tests, CATALOGUE, CAT, FAMILLES, SEEDS };
 // ============================================================ UI (DOM)
 if (typeof document !== 'undefined') (function () {
 const $ = s => document.querySelector(s);
@@ -2501,7 +2572,7 @@ $('#m-ok').onclick = async () => {
   stats.poserEspeces(etat.data, moisCourant, m.especes || 0);
   marquer('data'); recategoriser(); toast(`${moisLisible(moisCourant)} enregistré`, 'ok'); await sauver();
 };
-function rendrePea() { rendrePositions('PEA', 'pea', 'Importe le fichier « positions instantanées » du PEA (Opérations › Importer) pour voir la répartition par ETF et par pays.'); rendrePositions('AV', 'av', 'Importe l\'export Excel « données financières » de Linxea (Opérations › Importer) pour voir la répartition par support et par pays.'); rendreGlobale(); }
+function rendrePea() { rendreCrypto(); rendrePerformance(); rendrePositions('PEA', 'pea', 'Importe le fichier « positions instantanées » du PEA (Opérations › Importer) pour voir la répartition par ETF et par pays.'); rendrePositions('AV', 'av', 'Importe l\'export Excel « données financières » de Linxea (Opérations › Importer) pour voir la répartition par support et par pays.'); rendreGlobale(); }
 function rendrePositions(support, id, aide) {
   const r = diversification.calculer(etat.data, etat.rules, support);
   if (!r) { $('#t-' + id + '-etf').innerHTML = `<p class="muted small">${aide}</p>`; $('#t-' + id + '-pays').innerHTML = ''; $('#c-' + id + '-etf').innerHTML = ''; $('#k-' + id + '-date').textContent = ''; $('#k-' + id + '-src').textContent = ''; return; }
@@ -2513,6 +2584,42 @@ function rendrePositions(support, id, aide) {
   $('#t-' + id + '-pays').innerHTML = `<p class="small muted" style="margin:0 0 6px">Par pays (poids des indices suivis)</p>` + r.pays.map(p => `<div class="fam-row" style="cursor:default"><span class="nom">${esc(p.pays)}</span><span class="bar" style="flex-basis:120px"><i style="width:${Math.round(p.montant / maxP * 100)}%;background:${p.pays === 'Non renseigné' ? '#9a9890' : 'var(--acc)'}"></i></span><span class="pc">${p.part} %</span><span class="mt">${fmtE(p.montant)}</span></div>`).join('');
   $('#k-' + id + '-src').textContent = (r.dateRef ? `Poids pays : factsheets MSCI et fiches des supports, au ${r.dateRef}. ` : '') + (r.inconnus.length ? `ISIN sans référentiel : ${r.inconnus.join(', ')} — envoie-les à Claude pour compléter.` : '');
   if (typeof Chart === 'function') chart('c-' + id + '-etf', { type: 'doughnut', data: { labels: r.parETF.map(e => e.nom), datasets: [{ data: r.parETF.map(e => e.montant), backgroundColor: r.parETF.map((e, i) => PALETTE[i % PALETTE.length]), borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.label} : ${fmtE(c.parsed)}` } } } } });
+}
+function rendreCrypto() {
+  const pos = modele.dernieresPositions(etat.data, 'CRYPTO');
+  $('#k-btc-ok').classList.add('hidden'); $('#k-btc-info').textContent = '';
+  if (!pos) { $('#t-crypto').innerHTML = '<p class="muted small">Importe l\'export de transactions Bitstack (Opérations › Importer) : quantité détenue, euros investis et valorisation se calculent seuls.</p>'; $('#k-crypto-date').textContent = ''; $('#k-btc-cours').classList.add('hidden'); return; }
+  $('#k-btc-cours').classList.remove('hidden');
+  $('#k-crypto-date').textContent = `transactions jusqu'au ${pos.date}`;
+  $('#t-crypto').innerHTML = pos.positions.map(x => `<div class="fam-row" style="cursor:default"><span class="ico" style="background:${couleur('CRYPTO')}">🪙</span><span class="nom">${esc(x.nom)}<small class="muted" style="display:block">${x.quantite} ${x.isin} · ${x.achats || 0} achat(s)${x.depots ? ', ' + x.depots + ' dépôt(s)' : ''} · PRU ${fmtE(x.pru)} · cours ${fmtE(x.cours)}${x.dateCours ? ' au ' + x.dateCours : ''}</small></span><span class="pc">${x.investi ? ((x.montant - x.investi) >= 0 ? '+' : '') + Math.round((x.montant - x.investi) / x.investi * 1000) / 10 + ' %' : ''}</span><span class="mt">${fmtE(x.montant)}<small class="muted" style="display:block;font-weight:400">investi ${fmtE(x.investi)}</small></span></div>`).join('');
+}
+let btcLive = null;
+$('#k-btc-cours').onclick = async () => {
+  const pos = modele.dernieresPositions(etat.data, 'CRYPTO'); if (!pos) return;
+  $('#k-btc-info').textContent = 'cours en cours de récupération…';
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur'); const j = await r.json(); const prix = j.bitcoin && j.bitcoin.eur; if (!prix) throw new Error('réponse vide');
+    const btc = pos.positions.find(x => x.isin === 'BTC'); if (!btc) throw new Error('pas de BTC dans les positions');
+    btcLive = { prix, valeur: Math.round(btc.quantite * prix * 100) / 100, date: util.nowIso().slice(0, 10) };
+    $('#k-btc-info').textContent = `BTC ${fmtE(prix)} → ${fmtE(btcLive.valeur)} aujourd'hui (${btcLive.valeur - btc.investi >= 0 ? '+' : ''}${fmtE(Math.round((btcLive.valeur - btc.investi) * 100) / 100)})`;
+    $('#k-btc-ok').classList.remove('hidden');
+  } catch (e) { $('#k-btc-info').textContent = 'cours indisponible (' + e.message + ')'; }
+};
+$('#k-btc-ok').onclick = async () => {
+  const pos = modele.dernieresPositions(etat.data, 'CRYPTO'); if (!pos || !btcLive) return;
+  const positions = pos.positions.map(x => x.isin === 'BTC' ? Object.assign({}, x, { cours: btcLive.prix, dateCours: btcLive.date, montant: btcLive.valeur }) : x);
+  modele.poserPositions(etat.data, { support: 'CRYPTO', date: btcLive.date, total: Math.round(positions.reduce((s, x) => s + x.montant, 0) * 100) / 100, positions, investi: pos.investi });
+  marquer('data'); toast('Valorisation crypto du mois enregistrée', 'ok'); await sauver();
+};
+function rendrePerformance() {
+  const pf = performance.tous(etat.data, etat.rules);
+  if (!pf.supports.length) { $('#k-perf').innerHTML = ''; $('#t-perf').innerHTML = '<p class="muted small">Importe les fichiers de positions (PEA, Linxea, Bitstack) ou saisis une valorisation : investi, valeur et gain apparaîtront ici.</p>'; videChart('c-perf', ''); $('#k-perf-date').textContent = ''; return; }
+  const chiffre = (lbl, val, sous, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big">${val}</div><span class="delta ${cls || ''}">${sous}</span></div>`;
+  $('#k-perf').innerHTML = chiffre('Investi', fmtE(pf.investi), 'prix de revient') + chiffre('Valeur', fmtE(pf.valeur), 'derniers fichiers / saisies') + chiffre('Gain latent', fmtE(pf.gain), pf.pct === null ? '' : (pf.gain >= 0 ? '+' : '') + pf.pct + ' %', pf.gain >= 0 ? 'pos' : 'neg');
+  const srcLib = { fichier: 'investi : fichier', pru: 'investi : PRU × parts', versements: 'investi : cumul des versements' };
+  $('#t-perf').innerHTML = pf.supports.map(x => `<div class="fam-row" style="cursor:default"><span class="ico" style="background:${couleur(x.support)}">${{ PEA: '📈', AV: '🛡️', CRYPTO: '🪙' }[x.support]}</span><span class="nom">${SUPPORTS_LIBELLES[x.support]}<small class="muted" style="display:block">${srcLib[x.source]} · valeur au ${x.date}</small></span><span class="pc" style="min-width:60px;color:${x.gain >= 0 ? 'var(--ok)' : 'var(--bad)'}">${x.pct === null ? '' : (x.gain >= 0 ? '+' : '') + x.pct + ' %'}</span><span class="mt">${fmtE(x.valeur)}<small class="muted" style="display:block;font-weight:400">investi ${fmtE(x.investi)} · ${x.gain >= 0 ? '+' : ''}${fmtE(x.gain)}</small></span></div>`).join('');
+  $('#k-perf-date').textContent = '';
+  if (typeof Chart === 'function') { const c = performance.courbe(etat.data); if (c.mois.length >= 2) chart('c-perf', { type: 'line', data: { labels: c.mois, datasets: [{ label: 'Valeur', data: c.valeur, borderColor: '#1d7a4d', backgroundColor: '#1d7a4d22', fill: true, tension: .2, spanGaps: true }, { label: 'Versé (cumul)', data: c.verse, borderColor: '#2b5db3', borderDash: [4, 4], tension: .2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v.toLocaleString('fr-FR') } } }, plugins: { legend: { position: 'bottom' }, tooltip: tipEuro } } }); else videChart('c-perf', 'courbe disponible à partir de deux mois'); }
 }
 function rendreGlobale() {
   const g = diversification.globale(etat.data, etat.rules);
@@ -2682,6 +2789,10 @@ function rendreAccueil() {
   // pro
   const pr = bord.pro(etat.data, etat.rules, acMois), t = bord.tresorerie(etat.data, etat.rules);
   $('#ac-pro').innerHTML = chiffre('Encaissé', fmtE(pr.enc.total), `<span class="delta">versé au perso ${fmtE(pr.prel.total)}</span>`) + chiffre('Provision du mois', pr.provision.total === null ? '—' : fmtE(pr.provision.total), `<span class="delta">${pr.provision.total === null ? 'taux à saisir dans Bilan' : 'URSSAF, CARPIMKO, CFE, IR'}</span>`) + chiffre('Trésorerie libre pro', t.libre === null ? '—' : fmtE(t.libre), `<span class="delta">${t.solde ? 'solde ' + fmtE(t.solde.montant) + ' − provisions dues' : 'importe un CSV pro'}</span>`);
+  // investissements
+  const pf = performance.tous(etat.data, etat.rules);
+  $('#ac-invest-card').classList.toggle('hidden', !pf.supports.length);
+  if (pf.supports.length) $('#ac-invest').innerHTML = chiffre('Valeur', fmtE(pf.valeur), `<span class="delta">${pf.supports.map(x => SUPPORTS_LIBELLES[x.support] + ' ' + fmtE(x.valeur)).join(' · ')}</span>`) + chiffre('Investi', fmtE(pf.investi), '<span class="delta">prix de revient</span>') + chiffre('Gain latent', fmtE(pf.gain), `<span class="delta ${pf.gain >= 0 ? 'pos' : 'neg'}">${pf.pct === null ? '' : (pf.gain >= 0 ? '+' : '') + pf.pct + ' %'}</span>`);
   // mini graphe 6 mois
   if (typeof Chart === 'function') {
     const six = mois.slice(Math.max(0, i - 5), i + 1); const ev = graphes.persoMensuel(etat.data, six);
