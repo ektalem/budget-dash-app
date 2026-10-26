@@ -49,6 +49,9 @@ nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9p
 .boite-actions button{font:inherit;font-size:15px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);cursor:pointer}
 .boite-actions button.oui{background:var(--ok);color:#fff;border-color:var(--ok);font-weight:600}
 .progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:6px 0 12px}.progress i{display:block;height:100%;background:var(--acc)}
+#annuler-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:8;background:var(--ink);color:#fff;border-radius:24px;padding:8px 10px 8px 16px;display:flex;align-items:center;gap:12px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+#annuler-bar button{font:inherit;background:#fff;color:var(--ink);border:none;border-radius:16px;padding:5px 12px;cursor:pointer;font-weight:600}
+@media (max-width:700px){#annuler-bar{bottom:82px}}
 .menu{list-style:none;margin:0;padding:0}.menu li{padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between}.menu li:hover{background:#fafaf7}
 main{max-width:1200px;margin:0 auto;padding:20px}
 section.screen{display:none}section.screen.on{display:block}
@@ -217,7 +220,7 @@ input,select,textarea{max-width:100%}
 
 <section class="screen" id="screen-boite">
   <div class="boite-card">
-    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Boîte de réception <span class="muted small" id="bo-compteur"></span></h2><button class="b small" id="bo-retour">Accueil</button></div>
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Boîte de réception <span class="muted small" id="bo-compteur"></span></h2><div class="row"><button class="b small" id="bo-annuler" title="Revenir sur la dernière validation">↩ Précédent</button><button class="b small" id="bo-retour">Accueil</button></div></div>
     <div class="progress"><i id="bo-progress" style="width:0"></i></div>
     <div id="bo-contenu"></div>
   </div>
@@ -429,12 +432,13 @@ input,select,textarea{max-width:100%}
 </section>
 
 </main>
+<div id="annuler-bar" class="hidden"><span id="annuler-txt"></span><button id="annuler-btn">↩ Annuler</button></div>
 <div id="toasts"></div>
 
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.9.1';
 const SCHEMA = 1;
 
 const util = {
@@ -2314,10 +2318,12 @@ function brancherEditeur(root) {
     div.querySelector('.e-ok').onclick = async () => {
       const categorie = div.querySelector('.e-cat').value; if (!categorie) { toast('Choisis une catégorie', 'bad'); return; }
       const choix = { categorie, entite: div.querySelector('.e-ent') ? div.querySelector('.e-ent').value : undefined, poche: div.querySelector('.e-poche').value, tiers: div.querySelector('.e-tiers').value.trim(), etendre: div.querySelector(`input[name="et-${id}"]:checked`).value, montant: div.querySelector('.e-montant').checked, creerRegle: !div.querySelector('.e-sansregle').checked };
+      annulation.avant([o], `${norm.nomLisible(o)} → ${libelleCourt(categorie)}`);
       const r = engine.corriger(etat.data, etat.rules, machine, o, choix);
       marquer('data'); marquer('rules'); etat.editionId = null;
       const n = recategoriser();
       toast(r ? `Règle ${r.id} : ${r.match === 'exact' ? 'ce libellé' : r.match === 'tiers' ? 'tiers ' + r.pattern : 'famille ' + r.pattern} → ${categorie}` : 'Ligne validée', 'ok');
+      annulation.montrer(`${norm.nomLisible(o)} → ${libelleCourt(categorie)}`);
       await sauver();
     };
   });
@@ -2510,6 +2516,26 @@ $('#b-prov-ok').onclick = async () => {
   etat.rules.config.provisions = pv; marquer('rules'); toast('Taux de provision enregistrés', 'ok'); await sauver();
 };
 
+// ---------- annulation (v0.9.1) : chaque validation (boîte ou éditeur) prend un instantané des lignes touchées et des règles ; « Annuler » le restitue
+const annulation = {
+  pile: [], MAX: 20, timer: null,
+  champs: ['categorie', 'entite', 'interne', 'poche', 'statut', 'regle_id', 'propositions', 'note', 'annotation', 'apparie'],
+  avant(ops, libelle) {
+    const snap = { libelle, ops: ops.map(o => ({ id: o.id, etat: JSON.parse(JSON.stringify(Object.fromEntries(annulation.champs.map(k => [k, o[k]])))) })), rules: JSON.stringify({ rules: etat.rules.rules, historique: etat.rules.historique, tiers: etat.rules.tiers, compteurs: etat.rules.config.compteurs }) };
+    annulation.pile.push(snap); if (annulation.pile.length > annulation.MAX) annulation.pile.shift();
+    return snap;
+  },
+  montrer(libelle) { const bar = $('#annuler-bar'); $('#annuler-txt').textContent = libelle; bar.classList.remove('hidden'); clearTimeout(annulation.timer); annulation.timer = setTimeout(() => bar.classList.add('hidden'), 12000); },
+  async defaire() {
+    const snap = annulation.pile.pop(); if (!snap) { toast('Rien à annuler', 'warn'); return; }
+    const r = JSON.parse(snap.rules); etat.rules.rules = r.rules; etat.rules.historique = r.historique; etat.rules.tiers = r.tiers; etat.rules.config.compteurs = r.compteurs;
+    for (const x of snap.ops) { const o = etat.data.operations.find(y => y.id === x.id); if (o) Object.assign(o, JSON.parse(JSON.stringify(x.etat))); }
+    marquer('data'); marquer('rules'); $('#annuler-bar').classList.add('hidden'); etat.editionId = null; boite.autre = false;
+    recategoriser(); toast(`Annulé : ${snap.libelle}`, 'ok'); await sauver();
+  }
+};
+$('#annuler-btn').onclick = () => annulation.defaire();
+
 // ---------- accueil et boîte de réception (v0.9 étape 1)
 const ICONES = { REV: '💶', FIX: '🏠', ABO: '🔁', ALIM: '🛒', MOB: '🚗', LOIS: '🎉', SANTE: '💊', PROJ: '🎯', HB: '↔️', INT: '🔄', EPG: '🌱', EPC: '🏦', HON: '🩺', ENT: '📥', RETRO: '🤝', FRAIS: '🧾', DEPL: '⛽', REPAS: '🍽️', COT: '🏛️', PREL: '💸', HE: '↔️', NC: '❔' };
 function icone(code) { return ICONES[String(code || 'NC').split('.')[0]] || '❔'; }
@@ -2594,10 +2620,11 @@ function rendreBoite() {
     </div>
   </div>`;
   const appliquer = async (categorie, opts) => {
+    annulation.avant(g.ops, `${g.nom} → ${libelleCourt(categorie)}`);
     let regles = 0;
     for (const x of g.ops) { const r = engine.corriger(etat.data, etat.rules, machine, x, Object.assign({ categorie, etendre: 'exact', montant: /MACSF/.test(x.cle) }, opts)); if (r) regles++; }
     marquer('data'); marquer('rules'); boite.autre = false; recategoriser();
-    toast(`${g.ops.length} ligne(s) → ${libelleCourt(categorie)}${regles ? ' · règle créée' : ''}`, 'ok'); await sauver();
+    toast(`${g.ops.length} ligne(s) → ${libelleCourt(categorie)}${regles ? ' · règle créée' : ''}`, 'ok'); annulation.montrer(`${g.nom} → ${libelleCourt(categorie)}`); await sauver();
   };
   $('#bo-oui').onclick = async () => {
     if (boite.autre || !g.proposition) { const cat = $('#bo-cat').value; if (!cat) { toast('Choisis une catégorie', 'bad'); return; } await appliquer(cat, { entite: $('#bo-ent') ? $('#bo-ent').value : undefined, poche: $('#bo-poche').value, etendre: document.querySelector('input[name="bo-et"]:checked').value, creerRegle: !$('#bo-sansregle').checked }); }
@@ -2607,6 +2634,7 @@ function rendreBoite() {
   $('#bo-ignorer').onclick = () => { boite.ignores.add(g.cle); boite.autre = false; rendreBoite(); };
 }
 $('#bo-retour').onclick = () => montrerEcran('accueil');
+$('#bo-annuler').onclick = () => annulation.defaire();
 
 // ---------- graphes (Chart.js + d3-sankey, chargés en différé depuis un CDN ; Méthodo v3 §9.2)
 const PALETTE = ['#2b5db3', '#1d7a4d', '#a46a0b', '#b4342c', '#6b4fa0', '#0f8b8d', '#c2558b', '#5f6f2f', '#8a5a2b', '#3a7bd5', '#7a7a7a', '#d08a2e', '#2e8b57', '#b86b00'];
