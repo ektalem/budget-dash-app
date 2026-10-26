@@ -52,6 +52,25 @@ nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9p
 #annuler-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:8;background:var(--ink);color:#fff;border-radius:24px;padding:8px 10px 8px 16px;display:flex;align-items:center;gap:12px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 #annuler-bar button{font:inherit;background:#fff;color:var(--ink);border:none;border-radius:16px;padding:5px 12px;cursor:pointer;font-weight:600}
 @media (max-width:700px){#annuler-bar{bottom:82px}}
+.catfam{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);overflow:hidden}
+.catfam .tete{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafaf7;border-bottom:1px solid var(--line)}
+.catfam .tete .emo{font-size:20px;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;flex:none}
+.catfam .tete input.nomf{font:inherit;font-weight:600;border:none;background:transparent;flex:1;min-width:0;padding:4px 6px;border-radius:6px}
+.catfam .tete input.nomf:hover,.catfam .tete input.nomf:focus{background:#fff;outline:1px solid var(--line)}
+.catrow{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 18px;border-bottom:1px solid var(--line)}
+.catrow:last-child{border-bottom:none}.catrow.masque{opacity:.5}
+.catrow input.nomc{font:inherit;border:none;background:transparent;flex:1;min-width:0;padding:4px 6px;border-radius:6px}
+.catrow input.nomc:hover,.catrow input.nomc:focus{background:#fafaf7;outline:1px solid var(--line)}
+.catrow .code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);min-width:90px}
+.catrow .n{font-size:12px;color:var(--muted);min-width:46px;text-align:right}
+.fleches button{font:inherit;font-size:12px;border:1px solid var(--line);background:#fff;border-radius:6px;width:26px;height:24px;cursor:pointer;color:var(--muted);padding:0}
+.fleches button:disabled{opacity:.3;cursor:default}
+.catfam .ajout{font:inherit;font-size:13px;background:none;border:none;color:var(--acc);cursor:pointer;padding:6px 12px 8px 18px;text-align:left;width:100%}
+.catrow .menu-btn{font:inherit;border:1px solid var(--line);background:#fff;border-radius:6px;padding:2px 8px;cursor:pointer}
+.catrow .oeil{font-size:15px;background:none;border:none;cursor:pointer;padding:2px}
+.cat-actions{display:flex;flex-wrap:wrap;gap:6px;padding:6px 12px 10px 52px;background:#fafaf7;border-bottom:1px solid var(--line);align-items:center}
+.cat-actions select{padding:3px 6px}
+@media (max-width:700px){.catrow .code{display:none}.catrow .n{display:none}.cat-actions{padding-left:12px}}
 .menu{list-style:none;margin:0;padding:0}.menu li{padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between}.menu li:hover{background:#fafaf7}
 main{max-width:1200px;margin:0 auto;padding:20px}
 section.screen{display:none}section.screen.on{display:block}
@@ -230,6 +249,7 @@ input,select,textarea{max-width:100%}
   <div class="card">
     <h2>Plus</h2>
     <ul class="menu">
+      <li data-go="categories"><span>🏷️ Catégories <span class="muted small">(noms, ordre, icônes, fusion)</span></span><span class="muted">›</span></li>
       <li data-go="bord"><span>📑 Bilan (tableaux)</span><span class="muted">›</span></li>
       <li data-go="avance"><span>⚙️ Réglages : règles, catégories, titulaire, compte GitHub, sauvegarde</span><span class="muted">›</span></li>
     </ul>
@@ -365,6 +385,16 @@ input,select,textarea{max-width:100%}
   </div>
 </section>
 
+<section class="screen" id="screen-categories">
+  <div class="row" style="justify-content:space-between;margin-bottom:10px">
+    <div class="sub" id="cat-spheres" style="margin:0"><button data-v="perso" class="on">Perso</button><button data-v="epargne">Épargne</button><button data-v="pro">Pro</button></div>
+    <div class="row"><label class="small"><input type="checkbox" id="cat-masquees"> voir les masquées</label><button class="b small" id="cat-nouvelle-fam">+ Famille</button><button class="b small" id="cat-retour">Retour</button></div>
+  </div>
+  <p class="small muted" style="margin:0 0 10px">Clique sur un nom pour le modifier, sur l'icône pour la changer, ▲▼ pour réordonner. L'œil masque une catégorie des listes sans toucher aux lignes. « ⋯ » pour fusionner ou déplacer dans une autre famille.</p>
+  <div id="cat-liste"></div>
+  <div class="edit hidden" id="cat-form"></div>
+</section>
+
 <section class="screen" id="screen-avance">
   <div class="card">
     <h2>Paramètres</h2>
@@ -390,24 +420,6 @@ input,select,textarea{max-width:100%}
   <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Historique des règles remplacées</summary>
     <div style="overflow:auto;margin-top:8px"><table id="historique"><thead><tr><th>Remplacée le</th><th>Id</th><th>Motif</th><th>Ancienne catégorie</th></tr></thead><tbody></tbody></table></div>
   </details>
-  <div class="card" id="card-categories">
-    <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0" title="Les codes livrés ne sont jamais supprimés : masqués, ils disparaissent des sélecteurs ; fusionnés, toutes leurs lignes passent dans la cible">Catégories <span class="muted" id="cat-count"></span></h2>
-      <div class="row"><select id="cat-sphere"><option value="">toutes</option><option value="perso">perso</option><option value="epargne">épargne</option><option value="pro">pro</option></select><input type="text" id="cat-filtre" placeholder="filtrer"><label class="small"><input type="checkbox" id="cat-masquees"> voir les masquées</label></div>
-    </div>
-    <div class="edit" style="margin-top:10px">
-      <div class="row">
-        <label>Nouveau code <input type="text" id="cat-new-code" placeholder="LOIS.SPORT" style="width:140px;text-transform:uppercase"></label>
-        <label>Libellé <input type="text" id="cat-new-lib" placeholder="Sport" style="width:180px"></label>
-        <label>Sphère <select id="cat-new-sphere"><option value="perso">perso</option><option value="epargne">épargne</option><option value="pro">pro</option></select></label>
-        <label>Famille (si nouvelle) <input type="text" id="cat-new-fam" placeholder="libellé de la famille" style="width:170px"></label>
-        <button class="b primary small" id="cat-new-ok">Ajouter</button>
-      </div>
-      <p class="small muted" style="margin:0">Code = FAMILLE.SOUS en majuscules (ou FAMILLE seule). Une famille existante (LOIS, FRAIS…) accueille le nouveau code dans ses totaux.</p>
-    </div>
-    <div style="overflow:auto;margin-top:8px"><table id="categories"><thead><tr><th>Famille</th><th>Code</th><th>Libellé</th><th>Sphère</th><th style="text-align:right">Lignes</th><th>Visible</th><th>Fusionner dans</th></tr></thead><tbody></tbody></table></div>
-    <details style="margin-top:8px"><summary class="small muted" style="cursor:pointer">Journal des fusions</summary><div id="cat-fusions" class="small" style="margin-top:6px"></div></details>
-  </div>
   <details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600;font-size:15px">Légende des codes</summary><div id="legende-1" class="small" style="margin-top:8px"></div></details>
   <div class="card" id="gh-connecte">
     <h2>Compte</h2>
@@ -432,13 +444,13 @@ input,select,textarea{max-width:100%}
 </section>
 
 </main>
-<div id="annuler-bar" class="hidden"><span id="annuler-txt"></span><button id="annuler-btn">↩ Annuler</button></div>
+<div id="annuler-bar" class="hidden"><span id="annuler-txt"></span><button id="annuler-btn">↩ Annuler la correction</button></div>
 <div id="toasts"></div>
 
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.1';
+const APP_VERSION = '0.9.2';
 const SCHEMA = 1;
 
 const util = {
@@ -667,8 +679,40 @@ const catalogue = {
   MASQUES_DEFAUT: ['REV.REMPLA', 'MOB.ENTRETIEN', 'MOB.MICRO', 'MOB.TC', 'MOB.TAXI', 'PROJ.DONATION', 'PROJ.LOCATIF', 'HB.AUTRE', 'INT.LIVRET',
     'HON.CB', 'ENT.FIFPL', 'ENT.RBT', 'RETRO.FAMI', 'FRAIS.DOCTOLIB', 'FRAIS.MOBILE', 'FRAIS.IA', 'FRAIS.ORDRE', 'DEPL.ENTRETIEN', 'COT.INDU', 'PREL.REMPLA', 'HE.AVANCES',
     'EPC.VERS', 'EPC.RETRAIT', 'EPC.INTERETS', 'EPC.FRAIS', 'EPC.TITRES', 'EPC.AUTRE'],
-  defaut() { return { ajouts: [], libelles: {}, masques: catalogue.MASQUES_DEFAUT.slice(), familles: {}, fusions: [], simplifie: true }; },
-  conf(rules) { if (!rules.catalogue) rules.catalogue = catalogue.defaut(); const c = rules.catalogue; for (const [k, v] of Object.entries(catalogue.defaut())) if (c[k] === undefined) c[k] = v; return c; },
+  defaut() { return { ajouts: [], libelles: {}, masques: catalogue.MASQUES_DEFAUT.slice(), familles: {}, fusions: [], simplifie: true, ordre: { familles: [], codes: {} }, icones: {} }; },
+  ICONES_DEFAUT: { REV: '💶', FIX: '🏠', ABO: '🔁', ALIM: '🛒', MOB: '🚗', LOIS: '🎉', SANTE: '💊', PROJ: '🎯', HB: '↔️', INT: '🔄', EPG: '🌱', EPC: '🏦', HON: '🩺', ENT: '📥', RETRO: '🤝', FRAIS: '🧾', DEPL: '⛽', REPAS: '🍽️', COT: '🏛️', PREL: '💸', HE: '↔️' },
+  icone(rules, fam) { const c = rules && rules.catalogue && rules.catalogue.icones || {}; return c[fam] || catalogue.ICONES_DEFAUT[fam] || '📁'; },
+  // familles dans l'ordre d'affichage (ordre personnalisé puis ordre livré), même chose pour les codes d'une famille
+  famillesOrdonnees(rules, sphere) {
+    const c = catalogue.conf(rules); const vues = new Set(); const res = [];
+    const tous = CATALOGUE.filter(x => !sphere || x[2] === sphere).map(x => x[0].split('.')[0]);
+    for (const f of [...(c.ordre.familles || []), ...tous]) if (tous.includes(f) && !vues.has(f)) { vues.add(f); res.push(f); }
+    return res;
+  },
+  codesOrdonnes(rules, fam) {
+    const c = catalogue.conf(rules); const tous = CATALOGUE.filter(x => x[0].split('.')[0] === fam).map(x => x[0]); const vues = new Set(); const res = [];
+    for (const k of [...((c.ordre.codes || {})[fam] || []), ...tous]) if (tous.includes(k) && !vues.has(k)) { vues.add(k); res.push(k); }
+    return res;
+  },
+  deplacerFamille(rules, fam, delta, sphere) {
+    const c = catalogue.conf(rules); const l = catalogue.famillesOrdonnees(rules, sphere); const i = l.indexOf(fam); const j = i + delta; if (i < 0 || j < 0 || j >= l.length) return false;
+    l.splice(i, 1); l.splice(j, 0, fam);
+    const autres = (c.ordre.familles || []).filter(f => !l.includes(f)); c.ordre.familles = [...l, ...autres]; return true;
+  },
+  deplacerCode(rules, code, delta) {
+    const c = catalogue.conf(rules); const fam = code.split('.')[0]; const l = catalogue.codesOrdonnes(rules, fam); const i = l.indexOf(code); const j = i + delta; if (i < 0 || j < 0 || j >= l.length) return false;
+    l.splice(i, 1); l.splice(j, 0, code); c.ordre.codes = c.ordre.codes || {}; c.ordre.codes[fam] = l; return true;
+  },
+  // changer de famille = nouveau code dans la famille cible (même libellé) + fusion de l'ancien dedans
+  changerFamille(rules, data, code, famCible) {
+    const [fam, sous] = code.split('.'); if (!sous) throw new Error('une famille seule ne se déplace pas'); if (fam === famCible) return code;
+    let nouveau = famCible + '.' + sous; let n = 2; while (CAT[nouveau]) nouveau = famCible + '.' + sous + '-' + (n++);
+    catalogue.ajouter(rules, nouveau, CAT[code].libelle, CAT[code].sphere);
+    catalogue.fusionner(rules, data, code, nouveau);
+    return nouveau;
+  },
+  icone_set(rules, fam, emoji) { const c = catalogue.conf(rules); c.icones = c.icones || {}; const e = String(emoji || '').trim(); if (!e || e === catalogue.ICONES_DEFAUT[fam]) delete c.icones[fam]; else c.icones[fam] = e; },
+  conf(rules) { if (!rules.catalogue) rules.catalogue = catalogue.defaut(); const c = rules.catalogue; for (const [k, v] of Object.entries(catalogue.defaut())) if (c[k] === undefined) c[k] = v; if (!c.ordre.familles) c.ordre.familles = []; if (!c.ordre.codes) c.ordre.codes = {}; return c; },
   codeValide(code) { return /^[A-Z][A-Z0-9-]*(\.[A-Z][A-Z0-9-]*)?$/.test(code); },
   // recalcule CATALOGUE, CAT et FAMILLES en place (les références existantes restent valables)
   appliquer(rules) {
@@ -676,6 +720,12 @@ const catalogue = {
     const liste = CATALOGUE_BASE.map(x => x.slice());
     for (const a of c.ajouts) if (!liste.some(x => x[0] === a[0])) liste.push([a[0], a[1], a[2]]);
     for (const x of liste) if (c.libelles[x[0]]) x[1] = c.libelles[x[0]];
+    // ordre d'affichage : familles puis codes, personnalisés d'abord
+    const ordF = c.ordre && c.ordre.familles || [], ordC = c.ordre && c.ordre.codes || {};
+    const rang = (arr, k, base) => { const i = arr.indexOf(k); return i >= 0 ? i : 1000 + base; };
+    const sphR = { perso: 0, epargne: 1, pro: 2 };
+    const famBase = {}; liste.forEach((x, i) => { const f = x[0].split('.')[0]; if (famBase[f] === undefined) famBase[f] = i; });
+    liste.sort((a, b) => { const fa = a[0].split('.')[0], fb = b[0].split('.')[0]; if (fa !== fb) { const sa = sphR[a[2]] - sphR[b[2]]; if (sa) return sa; return rang(ordF, fa, famBase[fa]) - rang(ordF, fb, famBase[fb]); } return rang(ordC[fa] || [], a[0], CATALOGUE_BASE.findIndex(x => x[0] === a[0]) + 0.5 + liste.indexOf(a) / 1e4) - rang(ordC[fa] || [], b[0], CATALOGUE_BASE.findIndex(x => x[0] === b[0]) + 0.5 + liste.indexOf(b) / 1e4); });
     CATALOGUE.length = 0; CATALOGUE.push(...liste);
     for (const k of Object.keys(CAT)) delete CAT[k];
     for (const [code, libelle, sphere] of liste) CAT[code] = { code, libelle, sphere, masque: c.masques.includes(code) };
@@ -964,6 +1014,9 @@ const modele = {
     for (const [k, v] of Object.entries(ca2.familles)) if (vide(ci2.familles[k])) ci2.familles[k] = v;
     for (const m of ca2.masques) if (!ci2.masques.includes(m)) ci2.masques.push(m);
     for (const f of ca2.fusions) if (!ci2.fusions.some(x => x.de === f.de && x.vers === f.vers && x.date === f.date)) ci2.fusions.push(cl(f));
+    if (!ci2.ordre.familles.length && ca2.ordre && ca2.ordre.familles) ci2.ordre.familles = cl(ca2.ordre.familles);
+    for (const [f, l] of Object.entries(ca2.ordre && ca2.ordre.codes || {})) if (!ci2.ordre.codes[f]) ci2.ordre.codes[f] = cl(l);
+    for (const [f, e] of Object.entries(ca2.icones || {})) if (!ci2.icones[f]) ci2.icones[f] = e;
     catalogue.appliquer(res);
     const ca = autre.config || {}, ci = res.config;
     if (vide(ci.titulaire) && !vide(ca.titulaire)) { ci.titulaire = ca.titulaire; bilan.config_autre++; }
@@ -1868,6 +1921,8 @@ const tests = {
       ['catalogue : fusion des rules.json de deux postes = union des ajouts, masques et fusions ; migration des anciens fichiers', () => { const a = modele.rulesDefaut('PC'), b = modele.rulesDefaut('MAC'); catalogue.ajouter(a, 'LOIS.SPORT', 'Sport', 'perso'); catalogue.ajouter(b, 'LOIS.JEUX', 'Jeux', 'perso'); catalogue.masquer(b, 'MOB.MICRO'); const f = modele.fusionnerRegles(a, b).rules; const ok = f.catalogue.ajouts.length === 2 && f.catalogue.masques.includes('MOB.MICRO') && CAT['LOIS.JEUX'] && CAT['LOIS.SPORT']; const r = modele.rulesDefaut('T'); delete r.catalogue; const m = modele.migrer(r, modele.dataDefaut('T')); catalogue.appliquer(modele.rulesDefaut('T')); return ok && m === true && r.catalogue && Array.isArray(r.catalogue.ajouts) && !CAT['LOIS.JEUX']; }],
       ['titulaire deviné : nom le plus fréquent des VIR INST du perso (≥ 3), les deux sens d\'abord', () => { const j = jeu([ligne('2026-10-01', 'VIR INST MAXIME BELKADI', '100,00', P), ligne('2026-10-02', 'VIR INST MAXIME BELKADI', '-50,00', P), ligne('2026-10-03', 'VIR INST MR BELKADI MAXIME', '200,00', P), ligne('2026-10-04', 'VIR INST MARION ITTAH', '-46,00', P), ligne('2026-10-05', 'VIR INST MARION ITTAH', '-46,00', P), ligne('2026-10-06', 'VIR INST MARION ITTAH', '-46,00', P), ligne('2026-10-07', 'VIR INST MARION ITTAH', '-46,00', P)]); const d = engine.devinerTitulaire(j.d); const j2 = jeu([ligne('2026-10-01', 'VIR INST PAUL MARTIN', '10,00', P)]); return norm.memePersonne(d, 'MAXIME BELKADI') === false ? false : /BELKADI/.test(d) && engine.devinerTitulaire(j2.d) === null; }],
       ['PEA diversification : part par ETF et par pays depuis le référentiel, ISIN inconnu → « non renseigné »', () => { const d = modele.dataDefaut('T'); modele.poserPositions(d, { support: 'PEA', date: '2026-10-26', total: 1000, positions: [{ isin: 'IE0002XZSHO1', nom: 'W', montant: 800 }, { isin: 'FR0013412020', nom: 'EM', montant: 100 }, { isin: 'XX0000000000', nom: '?', montant: 100 }] }); const r = diversification.calculer(d, modele.rulesDefaut('T')); const us = r.pays.find(p => p.pays === 'États-Unis'), tw = r.pays.find(p => p.pays === 'Taïwan'), nr = r.pays.find(p => p.pays === 'Non renseigné'); return r.parETF[0].part === 80 && r.parETF[0].connu && us && Math.abs(us.montant - 583.52) < 0.01 && us.part === 58.4 && tw && Math.abs(tw.montant - 28.94) < 0.01 && nr && nr.part === 10 && r.inconnus.join() === 'XX0000000000' && r.dateRef === '2026-09-30' && diversification.calculer(modele.dataDefaut('T'), modele.rulesDefaut('T')) === null; }],
+      ['catalogue : ordre personnalisé des familles et des codes, déplacement ▲▼, respecté par CATALOGUE', () => { const r = modele.rulesDefaut('T'); const f0 = catalogue.famillesOrdonnees(r, 'perso'); catalogue.deplacerFamille(r, 'ALIM', -2, 'perso'); catalogue.appliquer(r); const f1 = catalogue.famillesOrdonnees(r, 'perso'); const c0 = catalogue.codesOrdonnes(r, 'ALIM'); catalogue.deplacerCode(r, 'ALIM.CAFE', -2); catalogue.appliquer(r); const c1 = catalogue.codesOrdonnes(r, 'ALIM'); const visibles = catalogue.visibles('perso'); const ok = f0.indexOf('ALIM') === 3 && f1.indexOf('ALIM') === 1 && c0[0] === 'ALIM.COURSES' && c1[0] === 'ALIM.CAFE' && visibles.indexOf('ALIM.CAFE') < visibles.indexOf('ALIM.COURSES') && !catalogue.deplacerCode(r, 'ALIM.CAFE', -1); catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
+      ['catalogue : changer une catégorie de famille = nouveau code + fusion ; icône de famille personnalisable', () => { const j = jeu([ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P)]); const nv = catalogue.changerFamille(j.r, j.d, 'ALIM.RESTO', 'LOIS'); engine.run(j.d, j.r); catalogue.icone_set(j.r, 'LOIS', '🎸'); const ok = nv === 'LOIS.RESTO' && CAT['LOIS.RESTO'].libelle === 'Restaurants, livraison' && j.d.operations[0].categorie === 'LOIS.RESTO' && CAT['ALIM.RESTO'].masque && catalogue.icone(j.r, 'LOIS') === '🎸' && catalogue.icone(j.r, 'ALIM') === '🛒'; catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
@@ -2077,7 +2132,7 @@ const ghPrefs = {
   lire() { try { return JSON.parse(localStorage.getItem('budget.github') || 'null'); } catch { return null; } },
   ecrire(o) { if (o) localStorage.setItem('budget.github', JSON.stringify(o)); else localStorage.removeItem('budget.github'); }
 };
-const NAV_PARENT = { boite: 'accueil', bord: 'plus', avance: 'plus' };
+const NAV_PARENT = { boite: 'accueil', bord: 'plus', avance: 'plus', categories: 'plus' };
 function montrerEcran(nom) { const nav = NAV_PARENT[nom] || nom; document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nav)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; window.scrollTo(0, 0); toutRendre(); }
 // écran de connexion seul (nav et écrans masqués) ou application
 function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('hidden', !connecte)); }
@@ -2538,7 +2593,7 @@ $('#annuler-btn').onclick = () => annulation.defaire();
 
 // ---------- accueil et boîte de réception (v0.9 étape 1)
 const ICONES = { REV: '💶', FIX: '🏠', ABO: '🔁', ALIM: '🛒', MOB: '🚗', LOIS: '🎉', SANTE: '💊', PROJ: '🎯', HB: '↔️', INT: '🔄', EPG: '🌱', EPC: '🏦', HON: '🩺', ENT: '📥', RETRO: '🤝', FRAIS: '🧾', DEPL: '⛽', REPAS: '🍽️', COT: '🏛️', PREL: '💸', HE: '↔️', NC: '❔' };
-function icone(code) { return ICONES[String(code || 'NC').split('.')[0]] || '❔'; }
+function icone(code) { const f = String(code || 'NC').split('.')[0]; if (f === 'NC') return '❔'; return catalogue.icone(etat.rules, f); }
 function libelleCourt(code) { if (!code) return 'Non catégorisé'; const c = CAT[code]; const fam = FAMILLES[code.split('.')[0]]; return c ? (code.includes('.') && fam ? `${fam} › ${c.libelle}` : c.libelle) : code; }
 function moisLisible(m) { if (!m) return '—'; const d = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1)); const t = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }); return t.charAt(0).toUpperCase() + t.slice(1); }
 function deltaHtml(cur, prev, inverse) { if (prev === null || prev === undefined || cur === null || cur === undefined || prev === 0) return '<span class="delta">—</span>'; const d = cur - prev; if (Math.abs(d) < 0.005) return '<span class="delta">= mois précédent</span>'; const bon = inverse ? d < 0 : d > 0; return `<span class="delta ${bon ? 'pos' : 'neg'}">${d > 0 ? '+' : '−'}${util.montantFr(Math.abs(d))} € vs mois précédent</span>`; }
@@ -2624,7 +2679,7 @@ function rendreBoite() {
     let regles = 0;
     for (const x of g.ops) { const r = engine.corriger(etat.data, etat.rules, machine, x, Object.assign({ categorie, etendre: 'exact', montant: /MACSF/.test(x.cle) }, opts)); if (r) regles++; }
     marquer('data'); marquer('rules'); boite.autre = false; recategoriser();
-    toast(`${g.ops.length} ligne(s) → ${libelleCourt(categorie)}${regles ? ' · règle créée' : ''}`, 'ok'); annulation.montrer(`${g.nom} → ${libelleCourt(categorie)}`); await sauver();
+    toast(`${g.ops.length} ligne(s) → ${libelleCourt(categorie)}${regles ? ' · règle créée' : ''}`, 'ok'); await sauver();
   };
   $('#bo-oui').onclick = async () => {
     if (boite.autre || !g.proposition) { const cat = $('#bo-cat').value; if (!cat) { toast('Choisis une catégorie', 'bad'); return; } await appliquer(cat, { entite: $('#bo-ent') ? $('#bo-ent').value : undefined, poche: $('#bo-poche').value, etendre: document.querySelector('input[name="bo-et"]:checked').value, creerRegle: !$('#bo-sansregle').checked }); }
@@ -2748,7 +2803,7 @@ document.querySelectorAll('#gr-onglets button').forEach(b => b.onclick = () => {
 $('#gr-mode').onchange = () => { grEtat.mode = $('#gr-mode').value; grEtat.valeur = null; rendreGraphes(); };
 $('#gr-valeur').onchange = () => { grEtat.valeur = $('#gr-valeur').value; rendreGraphes(); };
 $('#gr-detail-fermer').onclick = () => { grEtat.detail = null; etat.editionId = null; rendreGraphes(); };
-$('#gr-detail-cats').onclick = () => { montrerEcran('avance'); setTimeout(() => $('#card-categories').scrollIntoView({ behavior: 'smooth' }), 50); };
+$('#gr-detail-cats').onclick = () => montrerEcran('categories');
 window.addEventListener('resize', () => { if ($('#screen-graphes').classList.contains('on')) { clearTimeout(window._grResize); window._grResize = setTimeout(rendreGraphes, 250); } });
 
 // ---------- légende (recalculée avec le catalogue de l'utilisateur)
@@ -2758,45 +2813,71 @@ function rendreLegende() {
 }
 rendreLegende();
 
-// ---------- catégories : ajout, renommage, masquage, fusion (Méthodo v3 §2.11)
+// ---------- catégories (v0.9.2) : un menu éditable par sphère — nom, icône, ordre, visibilité, fusion, changement de famille
+const catUI = { sphere: 'perso', ouvert: null };
 function rendreCategories() {
   rendreLegende();
-  if (!etat.rules) { $('#categories tbody').innerHTML = ''; return; }
-  const sph = $('#cat-sphere').value, ft = norm.stripAccents($('#cat-filtre').value).toUpperCase(), voirMasq = $('#cat-masquees').checked;
+  if (!etat.rules || !$('#screen-categories').classList.contains('on')) return;
+  const voirMasq = $('#cat-masquees').checked;
+  document.querySelectorAll('#cat-spheres button').forEach(b => b.classList.toggle('on', b.dataset.v === catUI.sphere));
   const nb = {}; for (const o of etat.data.operations) if (o.categorie) nb[o.categorie] = (nb[o.categorie] || 0) + 1;
-  const liste = CATALOGUE.filter(c => (!sph || c[2] === sph) && (voirMasq || !CAT[c[0]].masque) && (!ft || norm.stripAccents(c[0] + ' ' + c[1] + ' ' + (FAMILLES[c[0].split('.')[0]] || '')).toUpperCase().includes(ft)));
-  $('#cat-count').textContent = `(${liste.length})`;
-  const optCible = (code) => `<option value="">—</option>` + CATALOGUE.filter(c => c[0] !== code && !CAT[c[0]].masque && c[2] === CAT[code].sphere).map(c => `<option value="${c[0]}">${c[0]} — ${esc(c[1])}</option>`).join('');
-  let famPrec = null;
-  $('#categories tbody').innerHTML = liste.map(c => {
-    const code = c[0], fam = code.split('.')[0], masque = CAT[code].masque, premiere = fam !== famPrec; famPrec = fam;
-    return `<tr data-code="${code}"${masque ? ' style="opacity:.55"' : ''}><td>${premiere ? `<span class="cat">${fam}</span> <input type="text" class="c-fam" value="${esc(FAMILLES[fam] || fam)}" style="width:150px" title="libellé de la famille">` : ''}</td><td><span class="cat">${code}</span></td><td><input type="text" class="c-lib" value="${esc(c[1])}" style="width:220px"></td><td class="muted">${c[2]}</td><td class="num">${nb[code] || 0}</td><td><input type="checkbox" class="c-vis"${masque ? '' : ' checked'} title="décoché = masqué dans les sélecteurs, les lignes existantes restent"></td><td><select class="c-fus">${optCible(code)}</select> <button class="b small c-fus-ok">Fusionner</button></td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="muted">aucune</td></tr>';
-  const fus = etat.rules.catalogue && etat.rules.catalogue.fusions || [];
-  $('#cat-fusions').innerHTML = fus.length ? fus.slice().reverse().map(f => `<p style="margin:2px 0">${f.date} : <span class="cat">${esc(f.de)}</span> → <span class="cat">${esc(f.vers)}</span> (${f.lignes} ligne(s))</p>`).join('') : '<p class="muted">aucune</p>';
-  $('#categories tbody').querySelectorAll('tr[data-code]').forEach(tr => {
-    const code = tr.dataset.code;
-    const lib = tr.querySelector('.c-lib'); lib.onchange = async () => { try { catalogue.renommer(etat.rules, code, lib.value); marquer('rules'); toast(`${code} : « ${lib.value.trim()} »`, 'ok'); await sauver(); } catch (e) { toast(e.message, 'bad'); } };
-    const fam = tr.querySelector('.c-fam'); if (fam) fam.onchange = async () => { try { catalogue.renommer(etat.rules, code, '', fam.value); marquer('rules'); await sauver(); } catch (e) { toast(e.message, 'bad'); } };
-    tr.querySelector('.c-vis').onchange = async (e) => { catalogue.masquer(etat.rules, code, !e.target.checked); marquer('rules'); await sauver(); };
-    tr.querySelector('.c-fus-ok').onclick = async () => {
-      const vers = tr.querySelector('.c-fus').value; if (!vers) { toast('Choisis la catégorie cible', 'bad'); return; }
-      const n = catalogue.nbLignes(etat.data, code);
-      if (!confirm(`Fusionner ${code} dans ${vers} ?\n${n} ligne(s), les règles, tiers et cibles passent dans ${vers} ; ${code} est masqué. Irréversible (sauf refusion inverse ligne à ligne).`)) return;
-      try { const k = catalogue.fusionner(etat.rules, etat.data, code, vers); marquer('rules'); marquer('data'); recategoriser(); toast(`${code} → ${vers} : ${k} ligne(s)`, 'ok'); await sauver(); } catch (e) { toast(e.message, 'bad'); }
-    };
+  const fams = catalogue.famillesOrdonnees(etat.rules, catUI.sphere);
+  $('#cat-liste').innerHTML = fams.map((f, fi) => {
+    const codes = catalogue.codesOrdonnes(etat.rules, f).filter(c => voirMasq || !CAT[c].masque);
+    const seule = codes.length === 1 && codes[0] === f;
+    return `<div class="catfam" data-fam="${f}">
+      <div class="tete"><span class="emo" style="background:${couleur(f)}" title="changer l'icône">${catalogue.icone(etat.rules, f)}</span><input class="nomf" value="${esc(FAMILLES[f] || f)}" title="${f}"><span class="code small muted">${f}</span><span class="fleches"><button class="f-up" ${fi === 0 ? 'disabled' : ''}>▲</button><button class="f-down" ${fi === fams.length - 1 ? 'disabled' : ''}>▼</button></span></div>
+      ${codes.map((c, ci) => { const m = CAT[c].masque; return `<div class="catrow${m ? ' masque' : ''}" data-code="${c}"><input class="nomc" value="${esc(CAT[c].libelle)}"><span class="code">${c}</span><span class="n">${nb[c] || 0} l.</span><button class="oeil" title="${m ? 'réafficher dans les listes' : 'masquer des listes'}">${m ? '🙈' : '👁️'}</button>${seule ? '' : `<span class="fleches"><button class="c-up" ${ci === 0 ? 'disabled' : ''}>▲</button><button class="c-down" ${ci === codes.length - 1 ? 'disabled' : ''}>▼</button></span>`}<button class="menu-btn" title="fusionner, déplacer">⋯</button></div>${catUI.ouvert === c ? `<div class="cat-actions"><span class="small muted">Fusionner dans</span><select class="fus"><option value="">—</option>${catalogue.visibles(catUI.sphere).filter(x => x !== c).map(x => `<option value="${x}">${esc(libelleCourt(x))}</option>`).join('')}</select><button class="b small fus-ok">Fusionner</button>${c.includes('.') ? `<span class="small muted" style="margin-left:8px">Déplacer dans</span><select class="dep"><option value="">—</option>${fams.filter(x => x !== f).map(x => `<option value="${x}">${esc(FAMILLES[x] || x)}</option>`).join('')}</select><button class="b small dep-ok">Déplacer</button>` : ''}<button class="b small fermer" style="margin-left:auto">Fermer</button></div>` : ''}`; }).join('')}
+      <button class="ajout" data-fam="${f}">+ Ajouter une catégorie dans « ${esc(FAMILLES[f] || f)} »</button>
+    </div>`;
+  }).join('') || '<p class="muted">aucune famille</p>';
+  const z = $('#cat-liste');
+  z.querySelectorAll('.catfam').forEach(div => {
+    const f = div.dataset.fam;
+    div.querySelector('.nomf').onchange = async (e) => { try { catalogue.renommer(etat.rules, catalogue.codesOrdonnes(etat.rules, f)[0], '', e.target.value); marquer('rules'); await sauver(); } catch (err) { toast(err.message, 'bad'); } };
+    div.querySelector('.emo').onclick = async () => { const v = prompt(`Icône pour « ${FAMILLES[f] || f} » (un emoji) :`, catalogue.icone(etat.rules, f)); if (v === null) return; catalogue.icone_set(etat.rules, f, v); marquer('rules'); await sauver(); };
+    div.querySelector('.f-up').onclick = async () => { if (catalogue.deplacerFamille(etat.rules, f, -1, catUI.sphere)) { catalogue.appliquer(etat.rules); marquer('rules'); await sauver(); } };
+    div.querySelector('.f-down').onclick = async () => { if (catalogue.deplacerFamille(etat.rules, f, 1, catUI.sphere)) { catalogue.appliquer(etat.rules); marquer('rules'); await sauver(); } };
+    div.querySelector('.ajout').onclick = () => formCategorie(f);
+  });
+  z.querySelectorAll('.catrow').forEach(row => {
+    const c = row.dataset.code;
+    row.querySelector('.nomc').onchange = async (e) => { try { catalogue.renommer(etat.rules, c, e.target.value); marquer('rules'); await sauver(); } catch (err) { toast(err.message, 'bad'); } };
+    row.querySelector('.oeil').onclick = async () => { catalogue.masquer(etat.rules, c, !CAT[c].masque); marquer('rules'); await sauver(); };
+    const up = row.querySelector('.c-up'), down = row.querySelector('.c-down');
+    if (up) up.onclick = async () => { if (catalogue.deplacerCode(etat.rules, c, -1)) { catalogue.appliquer(etat.rules); marquer('rules'); await sauver(); } };
+    if (down) down.onclick = async () => { if (catalogue.deplacerCode(etat.rules, c, 1)) { catalogue.appliquer(etat.rules); marquer('rules'); await sauver(); } };
+    row.querySelector('.menu-btn').onclick = () => { catUI.ouvert = catUI.ouvert === c ? null : c; rendreCategories(); };
+  });
+  z.querySelectorAll('.cat-actions').forEach(act => {
+    const c = act.previousElementSibling.dataset.code;
+    act.querySelector('.fermer').onclick = () => { catUI.ouvert = null; rendreCategories(); };
+    act.querySelector('.fus-ok').onclick = async () => { const vers = act.querySelector('.fus').value; if (!vers) { toast('Choisis la catégorie cible', 'bad'); return; } const n = catalogue.nbLignes(etat.data, c); if (!confirm(`Fusionner « ${CAT[c].libelle} » dans « ${libelleCourt(vers)} » ?\n${n} ligne(s), règles et tiers basculent ; « ${CAT[c].libelle} » est masquée.`)) return; try { catalogue.fusionner(etat.rules, etat.data, c, vers); catUI.ouvert = null; marquer('rules'); marquer('data'); recategoriser(); toast(`${n} ligne(s) → ${libelleCourt(vers)}`, 'ok'); await sauver(); } catch (e) { toast(e.message, 'bad'); } };
+    const dep = act.querySelector('.dep-ok'); if (dep) dep.onclick = async () => { const fam = act.querySelector('.dep').value; if (!fam) { toast('Choisis la famille', 'bad'); return; } try { const nv = catalogue.changerFamille(etat.rules, etat.data, c, fam); catUI.ouvert = null; marquer('rules'); marquer('data'); recategoriser(); toast(`Déplacée : ${libelleCourt(nv)}`, 'ok'); await sauver(); } catch (e) { toast(e.message, 'bad'); } };
   });
 }
-$('#cat-sphere').onchange = $('#cat-masquees').onchange = rendreCategories; $('#cat-filtre').oninput = rendreCategories;
-$('#cat-new-ok').onclick = async () => {
-  if (!etat.rules) return;
-  try {
-    const code = $('#cat-new-code').value.trim().toUpperCase();
-    catalogue.ajouter(etat.rules, code, $('#cat-new-lib').value, $('#cat-new-sphere').value, $('#cat-new-fam').value);
-    marquer('rules'); $('#cat-new-code').value = ''; $('#cat-new-lib').value = ''; $('#cat-new-fam').value = '';
-    toast(`Catégorie ${code} ajoutée`, 'ok'); await sauver();
-  } catch (e) { toast(e.message, 'bad'); }
-};
+function formCategorie(fam) {
+  const e = $('#cat-form'); e.classList.remove('hidden');
+  const nouvelleFam = !fam;
+  e.innerHTML = `<div class="row"><b>${nouvelleFam ? 'Nouvelle famille' : 'Nouvelle catégorie dans « ' + esc(FAMILLES[fam] || fam) + ' »'}</b></div>
+    <div class="row">${nouvelleFam ? `<label>Code famille <input type="text" id="cf-fam" placeholder="ANIM" style="width:100px;text-transform:uppercase"></label><label>Nom de la famille <input type="text" id="cf-famlib" placeholder="Animaux" style="width:160px"></label><label>Icône <input type="text" id="cf-ico" placeholder="🐾" style="width:50px"></label>` : ''}<label>Code <input type="text" id="cf-code" placeholder="SPORT" style="width:110px;text-transform:uppercase"></label><label>Nom <input type="text" id="cf-lib" placeholder="Sport" style="width:180px"></label><button class="b primary small" id="cf-ok">Ajouter</button><button class="b small" id="cf-fermer">Fermer</button></div>
+    <p class="small muted" style="margin:4px 0 0">Le code sert aux règles (lettres, chiffres, tirets) ; le nom est ce que tu vois partout.</p>`;
+  e.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  $('#cf-fermer').onclick = () => e.classList.add('hidden');
+  $('#cf-ok').onclick = async () => {
+    try {
+      const f = nouvelleFam ? $('#cf-fam').value.trim().toUpperCase() : fam; const sous = $('#cf-code').value.trim().toUpperCase();
+      if (!f || !sous) { toast('Code requis', 'bad'); return; }
+      catalogue.ajouter(etat.rules, f + '.' + sous, $('#cf-lib').value, catUI.sphere, nouvelleFam ? $('#cf-famlib').value : undefined);
+      if (nouvelleFam && $('#cf-ico').value.trim()) catalogue.icone_set(etat.rules, f, $('#cf-ico').value);
+      marquer('rules'); e.classList.add('hidden'); toast(`${f}.${sous} ajoutée`, 'ok'); await sauver();
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+}
+document.querySelectorAll('#cat-spheres button').forEach(b => b.onclick = () => { catUI.sphere = b.dataset.v; catUI.ouvert = null; rendreCategories(); });
+$('#cat-masquees').onchange = rendreCategories;
+$('#cat-nouvelle-fam').onclick = () => formCategorie(null);
+$('#cat-retour').onclick = () => montrerEcran('plus');
 
 // ---------- navigation, tests
 document.querySelectorAll('#nav button').forEach(b => b.onclick = () => montrerEcran(b.dataset.screen));
