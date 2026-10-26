@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <style>
 :root{--bg:#f6f5f1;--card:#fff;--ink:#1f1f1d;--muted:#6b6a64;--line:#dcdad2;--ok:#1d7a4d;--warn:#a46a0b;--bad:#b4342c;--acc:#2b5db3;--accbg:#e6eefb}
 *{box-sizing:border-box}
@@ -261,14 +262,14 @@ input,select,textarea{max-width:100%}
   <div class="card" style="padding:12px 14px">
     <div class="row" style="justify-content:space-between">
       <input type="text" id="f-texte" placeholder="🔍 Rechercher un marchand, une catégorie, un montant" style="flex:1;min-width:200px">
-      <label class="b" style="cursor:pointer" title="CSV Boursorama : perso, pro, livrets, PEA (positions)">⬇️ Importer<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label>
+      <label class="b" style="cursor:pointer" title="CSV Boursorama (perso, pro, livrets, positions PEA) et export Excel Linxea (assurance-vie)">⬇️ Importer<input type="file" id="in-csv" accept=".csv,.xlsx,text/csv" multiple class="hidden"></label>
     </div>
     <div class="row" style="margin-top:8px">
       <div class="sub" style="margin:0" id="f-comptes"><button data-v="" class="on">Tous</button><button data-v="perso">Perso</button><button data-v="pro">Pro</button><button data-v="epargne">Épargne</button></div>
       <label class="small"><input type="checkbox" id="f-aconfirmer"> à confirmer seulement</label>
       <span class="muted small" id="ops-count" style="margin-left:auto"></span>
     </div>
-    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse les CSV ici</div>
+    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse ici les CSV Bourso et l'Excel Linxea</div>
     <div id="import-resultat"></div>
     <div class="kv small" style="margin-top:6px" id="etat-fichiers"></div>
   </div>
@@ -280,6 +281,14 @@ input,select,textarea{max-width:100%}
     <div class="card"><h2 title="Soldes lus dans le dernier CSV importé de chaque compte">Comptes courants</h2><div id="k-courants"></div></div>
     <div class="card"><h2 title="Livret A, LEP, LDDS, PEA : solde lu dans leur CSV ou saisi ; assurance-vie et crypto : valorisation saisie, sinon cumul des versements">Patrimoine</h2><div id="t-patri"></div></div>
     <div class="card large"><h2>Patrimoine dans le temps</h2><div class="chart haut" id="c-patri"></div></div>
+    <div class="card large"><h2 title="Livrets au dernier solde, PEA et assurance-vie par support importé, crypto à la dernière valorisation">Répartition globale</h2><div id="t-globale"></div></div>
+    <div class="card large" id="k-av-card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0" title="Depuis l'export Excel Linxea (Opérations › Importer)">Assurance-vie — répartition</h2><span class="small muted" id="k-av-date"></span></div>
+      <div class="gr-grid" style="margin-top:8px">
+        <div><div id="t-av-etf"></div><div class="chart" id="c-av-etf" style="height:200px"></div></div>
+        <div><div id="t-av-pays"></div><p class="small muted" id="k-av-src" style="margin:6px 0 0"></p></div>
+      </div>
+    </div>
     <div class="card large" id="k-pea-card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0" title="Depuis le fichier « positions instantanées » du PEA (Opérations › Importer)">PEA — répartition</h2><span class="small muted" id="k-pea-date"></span></div>
       <div class="gr-grid" style="margin-top:8px">
@@ -450,7 +459,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.2';
+const APP_VERSION = '0.9.3';
 const SCHEMA = 1;
 
 const util = {
@@ -543,18 +552,32 @@ const csv = {
   estEpargne(compte) { return csv.COMPTES_EPARGNE.includes(compte); },
   // Export « positions instantanées » du PEA Bourso (v0.9) : name;isin;quantity;buyingPrice;lastPrice;intradayVariation;amount;amountVariation;variation
   // → valorisation du PEA à la date du fichier (nom export-positions-instantanees-JJ-MM-AAAA_…) et liste des positions
-  estPositions(rows) { const h = (rows[0] || []).map(x => String(x).trim().toLowerCase()); return h.includes('isin') && h.includes('amount'); },
-  datePositions(nomFichier) { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(nomFichier || ''); return m ? `${m[3]}-${m[2]}-${m[1]}` : util.nowIso().slice(0, 10); },
+  // Deux formats d'instantané de positions : PEA Bourso (CSV : name;isin;…;amount) et assurance-vie Linxea (Excel : Nom du support, ISIN, Somme en Compte…)
+  FORMATS_POSITIONS: [
+    { support: 'PEA', cles: ['isin', 'amount'], nom: 'name', isin: 'isin', montant: 'amount', quantite: 'quantity', pru: 'buyingprice', cours: 'lastprice', variation: 'variation', date: null },
+    { support: 'AV', cles: ['isin', 'somme en compte'], nom: 'nom du support', isin: 'isin', montant: 'somme en compte', quantite: 'nbre de parts', pru: 'prix de revient moyen', cours: 'derniere cotation', variation: null, classe: 'categorie', sousClasse: 'sous-categorie', date: 'date' }
+  ],
+  entetePositions(rows) { return (rows[0] || []).map(x => norm.stripAccents(String(x ?? '')).trim().toLowerCase()); },
+  formatPositions(rows) { const h = csv.entetePositions(rows); return csv.FORMATS_POSITIONS.find(f => f.cles.every(k => h.includes(k))) || null; },
+  estPositions(rows) { return !!csv.formatPositions(rows); },
+  datePositions(nomFichier) { let m = /(\d\d)-(\d\d)-(\d{4})/.exec(nomFichier || ''); if (m) return `${m[3]}-${m[2]}-${m[1]}`; m = /(\d{4})-(\d\d)-(\d\d)/.exec(nomFichier || ''); return m ? m[0] : util.nowIso().slice(0, 10); },
+  dateFr(v) { if (!v) return null; if (v instanceof Date) return v.toISOString().slice(0, 10); const m = /^(\d\d)\/(\d\d)\/(\d{4})/.exec(String(v).trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : (/^\d{4}-\d\d-\d\d/.test(String(v)) ? String(v).slice(0, 10) : null); },
+  nombre(v) { if (typeof v === 'number') return Number.isFinite(v) ? v : null; return csv.montant(String(v ?? '').replace(/\s*%$/, '')); },
   toPositions(rows, nomFichier) {
-    const h = rows[0].map(x => String(x).trim().toLowerCase()); const col = (n) => h.indexOf(n);
-    const res = { fichier: nomFichier, type: 'positions', support: 'PEA', date: csv.datePositions(nomFichier), positions: [], total: 0, erreurs: [], lues: 0 };
+    const f = csv.formatPositions(rows); const h = csv.entetePositions(rows); const col = (n) => n ? h.indexOf(n) : -1; const lire = (r, n) => { const i = col(n); return i >= 0 ? r[i] : null; };
+    const res = { fichier: nomFichier, type: 'positions', support: f.support, date: csv.datePositions(nomFichier), positions: [], total: 0, erreurs: [], lues: 0 };
+    let dateMax = null;
     for (const r of rows.slice(1)) {
-      const isin = (r[col('isin')] || '').trim(); if (!isin) continue;
-      const montant = csv.montant(r[col('amount')]); if (montant === null) { res.erreurs.push(`${isin} : montant illisible`); continue; }
+      const isin = String(lire(r, f.isin) ?? '').trim(); if (!isin) continue;
+      const montant = csv.nombre(lire(r, f.montant)); if (montant === null) { res.erreurs.push(`${isin} : montant illisible`); continue; }
       res.lues++;
-      res.positions.push({ isin, nom: (r[col('name')] || '').trim(), quantite: csv.montant(r[col('quantity')]), pru: csv.montant(r[col('buyingprice')]), cours: csv.montant(r[col('lastprice')]), montant, variation: csv.montant(r[col('variation')]) });
+      const pos = { isin, nom: String(lire(r, f.nom) ?? '').trim(), quantite: csv.nombre(lire(r, f.quantite)), pru: csv.nombre(lire(r, f.pru)), cours: csv.nombre(lire(r, f.cours)), montant, variation: f.variation ? csv.nombre(lire(r, f.variation)) : null };
+      if (f.classe) { pos.classe = String(lire(r, f.classe) ?? '').trim() || null; pos.sousClasse = String(lire(r, f.sousClasse) ?? '').trim() || null; }
+      const d = f.date ? csv.dateFr(lire(r, f.date)) : null; if (d && (!dateMax || d > dateMax)) dateMax = d;
+      res.positions.push(pos);   // numéro de contrat, titulaire, performances : jamais conservés
       res.total += montant;
     }
+    if (dateMax && dateMax > res.date) res.date = dateMax;
     res.total = Math.round(res.total * 100) / 100;
     return res;
   },
@@ -1542,15 +1565,31 @@ const bord = {
 const ETF_REF = {
   'IE0002XZSHO1': { nom: 'iShares MSCI World Swap PEA', indice: 'MSCI World', date: '2026-09-30', source: 'MSCI, factsheet MSCI World Index', pays: { 'États-Unis': 72.94, 'Japon': 5.91, 'Royaume-Uni': 3.41, 'Canada': 3.29, 'France': 2.24, 'Autres pays développés': 12.21 } },
   'FR001400U5Q4': { nom: 'Amundi PEA Monde (MSCI World)', indice: 'MSCI World', date: '2026-09-30', source: 'MSCI, factsheet MSCI World Index', pays: { 'États-Unis': 72.94, 'Japon': 5.91, 'Royaume-Uni': 3.41, 'Canada': 3.29, 'France': 2.24, 'Autres pays développés': 12.21 } },
-  'FR0013412020': { nom: 'Amundi PEA Emergent (MSCI EM ESG)', indice: 'MSCI Emerging Markets (indice parent, approximation)', date: '2026-09-30', source: 'MSCI, factsheet MSCI Emerging Markets Index', pays: { 'Taïwan': 28.94, 'Corée du Sud': 21.4, 'Chine': 19.8, 'Inde': 10.65, 'Brésil': 4.09, 'Autres pays émergents': 15.12 } }
+  'FR0013412020': { nom: 'Amundi PEA Emergent (MSCI EM ESG)', indice: 'MSCI Emerging Markets (indice parent, approximation)', date: '2026-09-30', source: 'MSCI, factsheet MSCI Emerging Markets Index', pays: { 'Taïwan': 28.94, 'Corée du Sud': 21.4, 'Chine': 19.8, 'Inde': 10.65, 'Brésil': 4.09, 'Autres pays émergents': 15.12 } },
+  // assurance-vie Linxea Spirit 2
+  'LU1681045370': { nom: 'Amundi MSCI Emerging Markets', indice: 'MSCI Emerging Markets', classe: 'Actions', date: '2026-09-30', source: 'MSCI, factsheet MSCI Emerging Markets Index', pays: { 'Taïwan': 28.94, 'Corée du Sud': 21.4, 'Chine': 19.8, 'Inde': 10.65, 'Brésil': 4.09, 'Autres pays émergents': 15.12 } },
+  'LU1681048804': { nom: 'Amundi S&P 500', indice: 'S&P 500', classe: 'Actions', date: '2026-10-26', source: 'indice 100 % États-Unis par construction', pays: { 'États-Unis': 100 } },
+  'LU1832174962': { nom: 'Indépendance AM Europe Small', indice: 'gestion active, petites et moyennes capitalisations Europe hors UK (classification Linxea)', classe: 'Actions', date: '2026-10-26', source: 'catégorie Linxea « Actions Europe hors UK Petites & Moy. Cap. »', pays: { 'Europe hors Royaume-Uni': 100 } },
+  'FONDSEURNG': { nom: 'Fonds euros Spirica Nouvelle Génération', indice: 'fonds en euros (capital garanti)', classe: 'Fonds euros', date: '2026-10-26', source: 'Linxea', pays: { 'Fonds en euros': 100 } }
 };
 const diversification = {
   ref(rules, isin) { return ((rules && rules.etfs) || {})[isin] || ETF_REF[isin] || null; },
+  // classe d'actifs d'une position : référentiel, sinon catégorie du fichier (Linxea : « Fonds Euro » / « Fonds Actions »), sinon Actions
+  classe(p, r) { if (r && r.classe) return r.classe; const c = norm.stripAccents(p.classe || '').toLowerCase(); if (/euro/.test(c)) return 'Fonds euros'; if (/obligat/.test(c)) return 'Obligations'; if (/immo|scpi|sci/.test(c)) return 'Immobilier'; if (/monet/.test(c)) return 'Monétaire'; return 'Actions'; },
+  // répartition globale par classe d'actifs : livrets (dernier solde), PEA et AV (positions), crypto (valorisation)
+  globale(data, rules) {
+    const p = stats.patrimoine(data); const cl = {}; const add = (k, m) => { if (m > 0) cl[k] = (cl[k] || 0) + m; };
+    for (const k of ['LA', 'LEP', 'LDDS']) { const d = p.dernier[k]; if (d && d.source !== 'versements') add('Livrets', d.montant); }
+    for (const sup of ['PEA', 'AV']) { const r = diversification.calculer(data, rules, sup); if (r) for (const e of r.parETF) add(e.classe, e.montant); else { const d = p.dernier[sup]; if (d) add(sup === 'AV' ? 'Assurance-vie (détail non importé)' : 'Actions', d.montant); } }
+    { const d = p.dernier.CRYPTO; if (d) add('Crypto', d.montant); }
+    const total = Object.values(cl).reduce((s, v) => s + v, 0);
+    return { total: Math.round(total * 100) / 100, classes: Object.entries(cl).map(([classe, m]) => ({ classe, montant: Math.round(m * 100) / 100, part: total ? Math.round(m / total * 1000) / 10 : 0 })).sort((a, b) => b.montant - a.montant) };
+  },
   // dernières positions → part par ETF et par pays ; les ISIN sans référentiel comptent en « non renseigné »
   calculer(data, rules, support) {
     const d = modele.dernieresPositions(data, support || 'PEA');
     if (!d || !d.total) return null;
-    const parETF = d.positions.filter(p => p.montant > 0).map(p => { const r = diversification.ref(rules, p.isin); return { isin: p.isin, nom: r ? r.nom : p.nom, nomBrut: p.nom, montant: p.montant, part: Math.round(p.montant / d.total * 1000) / 10, pru: p.pru, cours: p.cours, quantite: p.quantite, indice: r ? r.indice : null, connu: !!r }; }).sort((a, b) => b.montant - a.montant);
+    const parETF = d.positions.filter(p => p.montant > 0).map(p => { const r = diversification.ref(rules, p.isin); return { isin: p.isin, nom: r ? r.nom : p.nom, nomBrut: p.nom, montant: p.montant, part: Math.round(p.montant / d.total * 1000) / 10, pru: p.pru, cours: p.cours, quantite: p.quantite, indice: r ? r.indice : null, connu: !!r, classe: diversification.classe(p, r) }; }).sort((a, b) => b.montant - a.montant);
     const pays = {}; let inconnu = 0;
     for (const e of parETF) { const r = diversification.ref(rules, e.isin); if (!r) { inconnu += e.montant; continue; } for (const [p, w] of Object.entries(r.pays)) pays[p] = (pays[p] || 0) + e.montant * w / 100; }
     const listePays = Object.entries(pays).map(([p, m]) => ({ pays: p, montant: Math.round(m * 100) / 100, part: Math.round(m / d.total * 1000) / 10 })).sort((a, b) => b.montant - a.montant);
@@ -1923,6 +1962,7 @@ const tests = {
       ['PEA diversification : part par ETF et par pays depuis le référentiel, ISIN inconnu → « non renseigné »', () => { const d = modele.dataDefaut('T'); modele.poserPositions(d, { support: 'PEA', date: '2026-10-26', total: 1000, positions: [{ isin: 'IE0002XZSHO1', nom: 'W', montant: 800 }, { isin: 'FR0013412020', nom: 'EM', montant: 100 }, { isin: 'XX0000000000', nom: '?', montant: 100 }] }); const r = diversification.calculer(d, modele.rulesDefaut('T')); const us = r.pays.find(p => p.pays === 'États-Unis'), tw = r.pays.find(p => p.pays === 'Taïwan'), nr = r.pays.find(p => p.pays === 'Non renseigné'); return r.parETF[0].part === 80 && r.parETF[0].connu && us && Math.abs(us.montant - 583.52) < 0.01 && us.part === 58.4 && tw && Math.abs(tw.montant - 28.94) < 0.01 && nr && nr.part === 10 && r.inconnus.join() === 'XX0000000000' && r.dateRef === '2026-09-30' && diversification.calculer(modele.dataDefaut('T'), modele.rulesDefaut('T')) === null; }],
       ['catalogue : ordre personnalisé des familles et des codes, déplacement ▲▼, respecté par CATALOGUE', () => { const r = modele.rulesDefaut('T'); const f0 = catalogue.famillesOrdonnees(r, 'perso'); catalogue.deplacerFamille(r, 'ALIM', -2, 'perso'); catalogue.appliquer(r); const f1 = catalogue.famillesOrdonnees(r, 'perso'); const c0 = catalogue.codesOrdonnes(r, 'ALIM'); catalogue.deplacerCode(r, 'ALIM.CAFE', -2); catalogue.appliquer(r); const c1 = catalogue.codesOrdonnes(r, 'ALIM'); const visibles = catalogue.visibles('perso'); const ok = f0.indexOf('ALIM') === 3 && f1.indexOf('ALIM') === 1 && c0[0] === 'ALIM.COURSES' && c1[0] === 'ALIM.CAFE' && visibles.indexOf('ALIM.CAFE') < visibles.indexOf('ALIM.COURSES') && !catalogue.deplacerCode(r, 'ALIM.CAFE', -1); catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
       ['catalogue : changer une catégorie de famille = nouveau code + fusion ; icône de famille personnalisable', () => { const j = jeu([ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P)]); const nv = catalogue.changerFamille(j.r, j.d, 'ALIM.RESTO', 'LOIS'); engine.run(j.d, j.r); catalogue.icone_set(j.r, 'LOIS', '🎸'); const ok = nv === 'LOIS.RESTO' && CAT['LOIS.RESTO'].libelle === 'Restaurants, livraison' && j.d.operations[0].categorie === 'LOIS.RESTO' && CAT['ALIM.RESTO'].masque && catalogue.icone(j.r, 'LOIS') === '🎸' && catalogue.icone(j.r, 'ALIM') === '🛒'; catalogue.appliquer(modele.rulesDefaut('T')); return ok; }],
+      ['positions Linxea (Excel → lignes) : format reconnu, date de la colonne Date, classe fonds euro / actions, contrat et titulaire ignorés, répartition globale', () => { const rows = [['Placement', 'N° Contrat', 'Titulaire 1', 'Titulaire 2', 'Produit', 'Catégorie', 'Sous-catégorie', 'Nom du support', 'ISIN', 'Nbre de parts', 'Dernière cotation', 'Date', 'Somme en Compte', 'Plus ou Moins Value', 'Prix de Revient Moyen', 'Perf.% Deb. année'], ['Assurance vie', '123', 'X Y', '', 'Linxea Spirit 2', 'Fonds Actions', 'Actions Amérique', 'Amundi S&P 500', 'LU1681048804', '1.5', 100, '23/10/2026', 150, 10, 90, '17,5 %'], ['Assurance vie', '123', 'X Y', '', 'Linxea Spirit 2', 'Fonds Euro', 'Fonds Euros', 'Fonds en euros Spirica', 'FONDSEURNG', '0', 1, '25/10/2026', 850, 0, 0, '']]; const f = csv.formatPositions(rows); const p = csv.toPositions(rows, 'Linxea_donnes-financieres_abc_2026-10-26-export.xlsx'); const d = modele.dataDefaut('T'); modele.poserPositions(d, p); const r = diversification.calculer(d, modele.rulesDefaut('T'), 'AV'); const g = diversification.globale(d, modele.rulesDefaut('T')); return f.support === 'AV' && p.date === '2026-10-26' && p.total === 1000 && p.positions.length === 2 && !JSON.stringify(p).includes('123') && !JSON.stringify(p).includes('X Y') && p.positions[1].classe === 'Fonds Euro' && d.mensuel['2026-10'].soldes.AV === 1000 && r.parETF[0].classe === 'Fonds euros' && r.pays.find(x => x.pays === 'États-Unis').part === 15 && g.classes.find(c => c.classe === 'Fonds euros').montant === 850 && g.classes.find(c => c.classe === 'Actions').montant === 150 && g.total === 1000; }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
@@ -2263,8 +2303,14 @@ async function importerFichiers(files) {
   if (!etat.data) { toast('Non connecté', 'bad'); return; }
   const resultats = [];
   for (const f of files) {
-    if (!/\.csv$/i.test(f.name)) { resultats.push({ fichier: f.name, erreurs: ['pas un .csv'], lues: 0, ops: [], comptes: {} }); continue; }
-    const rows = csv.parse(await f.text());
+    let rows;
+    if (/\.xlsx?$/i.test(f.name)) {
+      if (typeof XLSX === 'undefined') { resultats.push({ fichier: f.name, erreurs: ['lecture Excel indisponible (bibliothèque non chargée, hors ligne ?)'], lues: 0, ops: [], comptes: {} }); continue; }
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true }); const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' }).filter(r => r.some(v => v !== '' && v !== null && v !== undefined));
+      if (!csv.estPositions(rows)) { resultats.push({ fichier: f.name, erreurs: ['Excel non reconnu : attendu un export Linxea (colonnes ISIN, Somme en Compte)'], lues: 0, ops: [], comptes: {} }); continue; }
+    } else if (!/\.csv$/i.test(f.name)) { resultats.push({ fichier: f.name, erreurs: ['pas un .csv ni un .xlsx'], lues: 0, ops: [], comptes: {} }); continue; }
+    else rows = csv.parse(await f.text());
     if (csv.estPositions(rows)) { const pz = csv.toPositions(rows, f.name); modele.poserPositions(etat.data, pz); marquer('data'); resultats.push(Object.assign(pz, { comptes: {}, ops: [], inserees: 0, doublons: 0 })); continue; }
     const r = csv.toOperations(rows, f.name);
     const d = modele.dedup(etat.data.operations, r.ops);
@@ -2455,17 +2501,25 @@ $('#m-ok').onclick = async () => {
   stats.poserEspeces(etat.data, moisCourant, m.especes || 0);
   marquer('data'); recategoriser(); toast(`${moisLisible(moisCourant)} enregistré`, 'ok'); await sauver();
 };
-function rendrePea() {
-  const r = diversification.calculer(etat.data, etat.rules);
-  const card = $('#k-pea-card');
-  if (!r) { $('#t-pea-etf').innerHTML = '<p class="muted small">Importe le fichier « positions instantanées » du PEA (Opérations › Importer) pour voir la répartition par ETF et par pays.</p>'; $('#t-pea-pays').innerHTML = ''; $('#c-pea-etf').innerHTML = ''; $('#k-pea-date').textContent = ''; $('#k-pea-src').textContent = ''; return; }
-  $('#k-pea-date').textContent = `positions au ${r.date} · ${fmtE(r.total)}`;
+function rendrePea() { rendrePositions('PEA', 'pea', 'Importe le fichier « positions instantanées » du PEA (Opérations › Importer) pour voir la répartition par ETF et par pays.'); rendrePositions('AV', 'av', 'Importe l\'export Excel « données financières » de Linxea (Opérations › Importer) pour voir la répartition par support et par pays.'); rendreGlobale(); }
+function rendrePositions(support, id, aide) {
+  const r = diversification.calculer(etat.data, etat.rules, support);
+  if (!r) { $('#t-' + id + '-etf').innerHTML = `<p class="muted small">${aide}</p>`; $('#t-' + id + '-pays').innerHTML = ''; $('#c-' + id + '-etf').innerHTML = ''; $('#k-' + id + '-date').textContent = ''; $('#k-' + id + '-src').textContent = ''; return; }
+  $('#k-' + id + '-date').textContent = `positions au ${r.date} · ${fmtE(r.total)}`;
   const maxE = Math.max(...r.parETF.map(e => e.montant));
-  $('#t-pea-etf').innerHTML = r.parETF.map((e, i) => `<div class="fam-row" style="cursor:default" title="${esc(e.nomBrut)} · ${e.isin}${e.indice ? ' · ' + esc(e.indice) : ''}"><span class="ico" style="background:${PALETTE[i % PALETTE.length]}">📈</span><span class="nom">${esc(e.nom)}${e.connu ? '' : ' <span class="badge warn">ISIN inconnu</span>'}<small class="muted" style="display:block">${e.isin}${e.pru && e.cours ? ` · PRU ${util.montantFr(e.pru)} → ${util.montantFr(e.cours)} (${e.cours >= e.pru ? '+' : ''}${Math.round((e.cours / e.pru - 1) * 1000) / 10} %)` : ''}</small></span><span class="bar"><i style="width:${Math.round(e.montant / maxE * 100)}%;background:${PALETTE[i % PALETTE.length]}"></i></span><span class="pc">${e.part} %</span><span class="mt">${fmtE(e.montant)}</span></div>`).join('');
+  const ICO_CL = { 'Actions': '📈', 'Fonds euros': '🛡️', 'Obligations': '📜', 'Immobilier': '🏢', 'Monétaire': '💧' };
+  $('#t-' + id + '-etf').innerHTML = r.parETF.map((e, i) => `<div class="fam-row" style="cursor:default" title="${esc(e.nomBrut)} · ${e.isin}${e.indice ? ' · ' + esc(e.indice) : ''}"><span class="ico" style="background:${PALETTE[i % PALETTE.length]}">${ICO_CL[e.classe] || '📈'}</span><span class="nom">${esc(e.nom)}${e.connu ? '' : ' <span class="badge warn">ISIN inconnu</span>'}<small class="muted" style="display:block">${e.classe} · ${e.isin}${e.pru && e.cours ? ` · PRU ${util.montantFr(e.pru)} → ${util.montantFr(e.cours)} (${e.cours >= e.pru ? '+' : ''}${Math.round((e.cours / e.pru - 1) * 1000) / 10} %)` : ''}</small></span><span class="bar"><i style="width:${Math.round(e.montant / maxE * 100)}%;background:${PALETTE[i % PALETTE.length]}"></i></span><span class="pc">${e.part} %</span><span class="mt">${fmtE(e.montant)}</span></div>`).join('');
   const maxP = Math.max(...r.pays.map(p => p.montant));
-  $('#t-pea-pays').innerHTML = `<p class="small muted" style="margin:0 0 6px">Par pays (poids des indices suivis)</p>` + r.pays.map(p => `<div class="fam-row" style="cursor:default"><span class="nom">${esc(p.pays)}</span><span class="bar" style="flex-basis:120px"><i style="width:${Math.round(p.montant / maxP * 100)}%;background:${p.pays === 'Non renseigné' ? '#9a9890' : 'var(--acc)'}"></i></span><span class="pc">${p.part} %</span><span class="mt">${fmtE(p.montant)}</span></div>`).join('');
-  $('#k-pea-src').textContent = (r.dateRef ? `Poids pays : factsheets MSCI au ${r.dateRef}. ` : '') + (r.inconnus.length ? `ISIN sans référentiel : ${r.inconnus.join(', ')} — envoie-les à Claude pour compléter.` : '');
-  if (typeof Chart === 'function') chart('c-pea-etf', { type: 'doughnut', data: { labels: r.parETF.map(e => e.nom), datasets: [{ data: r.parETF.map(e => e.montant), backgroundColor: r.parETF.map((e, i) => PALETTE[i % PALETTE.length]), borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.label} : ${fmtE(c.parsed)}` } } } } });
+  $('#t-' + id + '-pays').innerHTML = `<p class="small muted" style="margin:0 0 6px">Par pays (poids des indices suivis)</p>` + r.pays.map(p => `<div class="fam-row" style="cursor:default"><span class="nom">${esc(p.pays)}</span><span class="bar" style="flex-basis:120px"><i style="width:${Math.round(p.montant / maxP * 100)}%;background:${p.pays === 'Non renseigné' ? '#9a9890' : 'var(--acc)'}"></i></span><span class="pc">${p.part} %</span><span class="mt">${fmtE(p.montant)}</span></div>`).join('');
+  $('#k-' + id + '-src').textContent = (r.dateRef ? `Poids pays : factsheets MSCI et fiches des supports, au ${r.dateRef}. ` : '') + (r.inconnus.length ? `ISIN sans référentiel : ${r.inconnus.join(', ')} — envoie-les à Claude pour compléter.` : '');
+  if (typeof Chart === 'function') chart('c-' + id + '-etf', { type: 'doughnut', data: { labels: r.parETF.map(e => e.nom), datasets: [{ data: r.parETF.map(e => e.montant), backgroundColor: r.parETF.map((e, i) => PALETTE[i % PALETTE.length]), borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.label} : ${fmtE(c.parsed)}` } } } } });
+}
+function rendreGlobale() {
+  const g = diversification.globale(etat.data, etat.rules);
+  if (!g.total) { $('#t-globale').innerHTML = '<p class="muted small">rien de connu pour l\'instant</p>'; return; }
+  const COUL = { 'Livrets': '#2b5db3', 'Fonds euros': '#6b4fa0', 'Actions': '#1d7a4d', 'Crypto': '#d08a2e', 'Obligations': '#0f8b8d', 'Immobilier': '#a46a0b' };
+  const max = Math.max(...g.classes.map(c => c.montant));
+  $('#t-globale').innerHTML = g.classes.map(c => `<div class="fam-row" style="cursor:default"><span class="nom">${esc(c.classe)}</span><span class="bar" style="flex-basis:160px"><i style="width:${Math.round(c.montant / max * 100)}%;background:${COUL[c.classe] || '#9a9890'}"></i></span><span class="pc">${c.part} %</span><span class="mt">${fmtE(c.montant)}</span></div>`).join('') + `<div class="fam-row" style="cursor:default"><span class="nom"><b>Total</b></span><span class="bar" style="flex-basis:160px"></span><span class="pc"></span><span class="mt"><b>${fmtE(g.total)}</b></span></div><p class="small muted" style="margin:6px 0 0">Hors comptes courants. Les livrets et le fonds euros sont sans risque de capital ; le reste suit les marchés.</p>`;
 }
 function rendrePoches() {
   const c = stats.controle(etat.data, etat.rules);
