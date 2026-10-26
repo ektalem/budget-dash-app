@@ -215,7 +215,6 @@ input,select,textarea{max-width:100%}
     <h2>Plus</h2>
     <ul class="menu">
       <li data-go="bord"><span>📑 Bilan (tableaux)</span><span class="muted">›</span></li>
-      <li data-go="validation"><span>☑️ Valider en liste <span class="muted small">(ancienne file)</span></span><span class="muted">›</span></li>
       <li data-go="avance"><span>⚙️ Réglages : règles, catégories, titulaire, compte GitHub, sauvegarde</span><span class="muted">›</span></li>
     </ul>
     <p class="small muted" style="margin:10px 0 0">Refonte en cours (étape 1 sur 4) : Opérations, Analyse et Comptes seront refaits aux étapes suivantes ; en attendant, ce sont les écrans existants.</p>
@@ -223,42 +222,21 @@ input,select,textarea{max-width:100%}
 </section>
 
 <section class="screen" id="screen-import">
-  <div class="card">
-    <div class="drop" id="drop">Glisser ici les CSV Boursorama (perso, pro, livrets, PEA)<br><span class="small">ou <label style="text-decoration:underline;cursor:pointer">choisir<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label></span></div>
-    <div id="import-resultat" style="margin-top:12px"></div>
-    <div class="kv" style="margin-top:8px" id="etat-fichiers"></div>
-  </div>
-  <div class="card">
+  <div class="card" style="padding:12px 14px">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0" title="Clique sur une ligne pour la corriger">Opérations <span class="muted" id="ops-count"></span></h2>
-      <div class="row">
-        <select id="f-compte"><option value="">tous les comptes</option><option value="perso">perso</option><option value="pro">pro</option><option value="epargne">livrets, PEA</option></select>
-        <select id="f-statut"><option value="">tous statuts</option><option value="a_valider">à valider</option><option value="auto">auto</option><option value="valide">validé</option></select>
-        <input type="text" id="f-texte" placeholder="filtrer">
-      </div>
+      <input type="text" id="f-texte" placeholder="🔍 Rechercher un marchand, une catégorie, un montant" style="flex:1;min-width:200px">
+      <label class="b" style="cursor:pointer" title="CSV Boursorama : perso, pro, livrets, PEA (positions)">⬇️ Importer<input type="file" id="in-csv" accept=".csv,text/csv" multiple class="hidden"></label>
     </div>
-    <div style="overflow:auto;margin-top:6px"><table id="ops"><thead><tr><th>Date</th><th>Compte</th><th>Libellé</th><th>Catégorie</th><th>Entité</th><th>Statut</th><th style="text-align:right">Montant</th></tr></thead><tbody></tbody></table></div>
-    <p class="muted small" id="ops-more"></p>
+    <div class="row" style="margin-top:8px">
+      <div class="sub" style="margin:0" id="f-comptes"><button data-v="" class="on">Tous</button><button data-v="perso">Perso</button><button data-v="pro">Pro</button><button data-v="epargne">Épargne</button></div>
+      <label class="small"><input type="checkbox" id="f-aconfirmer"> à confirmer seulement</label>
+      <span class="muted small" id="ops-count" style="margin-left:auto"></span>
+    </div>
+    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse les CSV ici</div>
+    <div id="import-resultat"></div>
+    <div class="kv small" style="margin-top:6px" id="etat-fichiers"></div>
   </div>
-</section>
-
-<section class="screen" id="screen-validation">
-  <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0" title="Chaque correction crée une règle pour les prochaines lignes du même marchand">À valider</h2>
-      <span class="small muted" id="val-resume"></span>
-    </div>
-    <div id="val-lot" class="row hidden" style="position:sticky;top:44px;z-index:4;margin-top:10px;padding:8px;background:var(--accbg);border-radius:8px;align-items:center">
-      <b><span id="lot-n">0</span> cochée(s)</b>
-      <select id="lot-cat"></select>
-      <select id="lot-ent" class="hidden"></select>
-      <select id="lot-poche"></select>
-      <label class="small"><input type="checkbox" id="lot-regle" checked> règle par libellé</label>
-      <button class="b primary small" id="lot-ok">Appliquer</button>
-      <button class="b small" id="lot-annuler">Annuler</button>
-    </div>
-    <div id="val-liste" style="margin-top:10px"></div>
-  </div>
+  <div class="card" style="padding:6px 14px"><div id="ops-liste"></div><p class="muted small" id="ops-more" style="margin:8px 0 4px"></p></div>
 </section>
 
 <section class="screen" id="screen-mensuel">
@@ -308,13 +286,6 @@ input,select,textarea{max-width:100%}
       <label class="small muted">Mois <select id="b-mois"></select></label>
     </div>
     <div id="b-synthese" style="margin-top:10px"></div>
-  </div>
-  <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0" title="Cible mensuelle par famille ou sous-catégorie ; écart = réalisé − cible">Perso — budget cible</h2>
-      <button class="b primary small" id="b-budget-ok">Enregistrer</button>
-    </div>
-    <div style="overflow:auto;margin-top:8px"><table id="b-budget"><thead><tr><th>Famille / catégorie</th><th style="text-align:right">Réalisé</th><th style="text-align:right">Moyenne</th><th style="text-align:right">Cible</th><th style="text-align:right">Écart</th></tr></thead><tbody></tbody></table></div>
   </div>
   <div class="card">
     <h2>Perso — taux d'épargne</h2>
@@ -449,7 +420,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.0-etape1';
+const APP_VERSION = '0.9.0-etape2';
 const SCHEMA = 1;
 
 const util = {
@@ -540,6 +511,23 @@ const csv = {
   },
   COMPTES_EPARGNE: ['LA', 'LEP', 'LDDS', 'PEA'],
   estEpargne(compte) { return csv.COMPTES_EPARGNE.includes(compte); },
+  // Export « positions instantanées » du PEA Bourso (v0.9) : name;isin;quantity;buyingPrice;lastPrice;intradayVariation;amount;amountVariation;variation
+  // → valorisation du PEA à la date du fichier (nom export-positions-instantanees-JJ-MM-AAAA_…) et liste des positions
+  estPositions(rows) { const h = (rows[0] || []).map(x => String(x).trim().toLowerCase()); return h.includes('isin') && h.includes('amount'); },
+  datePositions(nomFichier) { const m = /(\d\d)-(\d\d)-(\d{4})/.exec(nomFichier || ''); return m ? `${m[3]}-${m[2]}-${m[1]}` : util.nowIso().slice(0, 10); },
+  toPositions(rows, nomFichier) {
+    const h = rows[0].map(x => String(x).trim().toLowerCase()); const col = (n) => h.indexOf(n);
+    const res = { fichier: nomFichier, type: 'positions', support: 'PEA', date: csv.datePositions(nomFichier), positions: [], total: 0, erreurs: [], lues: 0 };
+    for (const r of rows.slice(1)) {
+      const isin = (r[col('isin')] || '').trim(); if (!isin) continue;
+      const montant = csv.montant(r[col('amount')]); if (montant === null) { res.erreurs.push(`${isin} : montant illisible`); continue; }
+      res.lues++;
+      res.positions.push({ isin, nom: (r[col('name')] || '').trim(), quantite: csv.montant(r[col('quantity')]), pru: csv.montant(r[col('buyingprice')]), cours: csv.montant(r[col('lastprice')]), montant, variation: csv.montant(r[col('variation')]) });
+      res.total += montant;
+    }
+    res.total = Math.round(res.total * 100) / 100;
+    return res;
+  },
   dateAchat(libelle) { const m = /^(?:CARTE|AVOIR) (\d\d)\/(\d\d)\/(\d\d)/.exec(libelle); return m ? `20${m[3]}-${m[2]}-${m[1]}` : null; },
   type(libelle, montant) {
     const l = libelle.trim();
@@ -806,7 +794,20 @@ const modele = {
       abonnements: [], tiers: {}, catalogue: catalogue.defaut()
     };
   },
-  dataDefaut(machine) { return { schema: SCHEMA, meta: modele.meta(machine), operations: [], mensuel: {}, soldes: {} }; },
+  dataDefaut(machine) { return { schema: SCHEMA, meta: modele.meta(machine), operations: [], mensuel: {}, soldes: {}, positions: {} }; },
+  // Enregistre un instantané de positions (PEA) : data.positions[support][date], et pose la valorisation du mois dans mensuel.soldes
+  poserPositions(data, p) {
+    if (!data.positions) data.positions = {};
+    if (!data.positions[p.support]) data.positions[p.support] = {};
+    data.positions[p.support][p.date] = { total: p.total, positions: p.positions.map(x => Object.assign({}, x)) };
+    const m = util.mois(p.date); if (!data.mensuel[m]) data.mensuel[m] = { doctolib_nice: null, doctolib_ehpad: null, especes: null, soldes: {} };
+    if (!data.mensuel[m].soldes) data.mensuel[m].soldes = {};
+    // la valorisation la plus récente du mois gagne
+    const dates = Object.keys(data.positions[p.support]).filter(d => util.mois(d) === m).sort();
+    data.mensuel[m].soldes[p.support] = data.positions[p.support][dates[dates.length - 1]].total;
+    return true;
+  },
+  dernieresPositions(data, support) { const d = (data.positions || {})[support || 'PEA'] || {}; const dates = Object.keys(d).sort(); return dates.length ? Object.assign({ date: dates[dates.length - 1] }, d[dates[dates.length - 1]]) : null; },
   // Soldes des comptes courants relevés dans les CSV : le plus récent gagne
   majSoldes(data, soldes) { let modif = false; if (!data.soldes) data.soldes = {}; for (const [c, s] of Object.entries(soldes || {})) if (!data.soldes[c] || s.date >= data.soldes[c].date) { data.soldes[c] = { date: s.date, montant: s.montant }; modif = true; } return modif; },
   // Ajoute les seeds manquantes (décision 6 : ajout, jamais modification), migre les champs absents
@@ -825,6 +826,7 @@ const modele = {
     if (!rules.catalogue.simplifie) { const c = catalogue.conf(rules); for (const m of catalogue.MASQUES_DEFAUT) if (!c.masques.includes(m)) c.masques.push(m); c.simplifie = true; modif = true; }
     catalogue.appliquer(rules);
     if (!data.soldes) { data.soldes = {}; modif = true; }
+    if (!data.positions) { data.positions = {}; modif = true; }
     for (const p of rules.poches) { if (!p.ajustements) { p.ajustements = []; modif = true; } if (p.actif === undefined) { p.actif = true; modif = true; } }
     for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } if (o.solde === undefined) { o.solde = null; modif = true; } }
     return modif;
@@ -885,6 +887,8 @@ const modele = {
       res.mensuel[m] = r;
     }
     modele.majSoldes(res, ici.soldes); modele.majSoldes(res, autre.soldes);
+    res.positions = JSON.parse(JSON.stringify(ici.positions || {}));
+    for (const [sup, par] of Object.entries(autre.positions || {})) { res.positions[sup] = res.positions[sup] || {}; for (const [d, v] of Object.entries(par)) if (!res.positions[sup][d]) res.positions[sup][d] = JSON.parse(JSON.stringify(v)); }
     return { data: res, bilan };
   },
   // Fusion de deux rules.json : union des règles par id (les ids portent le nom du poste, donc jamais de collision entre postes ;
@@ -1132,8 +1136,9 @@ const engine = {
     if (/INTERET|INTÉRÊT|INTERÊT/i.test(c)) return { categorie: 'EPC.INTERETS', interne: true, statut: 'auto', regle_id: 'structurel' };
     if (/PRELEVEMENT(S)? SOCIA|\bCSG\b|\bFRAIS\b|COMMISSION|DROITS DE GARDE|TAXE/i.test(c)) return { categorie: 'EPC.FRAIS', interne: true, statut: 'auto', regle_id: 'structurel' };
     if (op.compte === 'PEA' && /ACHAT|VENTE|SOUSCRIPTION|RACHAT|COUPON|DIVIDENDE|\bETF\b|\bOPC\b|FCP|SICAV/i.test(c)) return { categorie: 'EPC.TITRES', interne: true, statut: 'auto', regle_id: 'structurel' };
-    if (/VIREMENT|^VIR /i.test(c)) return { categorie: null, statut: 'a_valider', propositions: op.montant > 0 ? ['EPC.VERS', 'EPC.AUTRE'] : ['EPC.RETRAIT', 'EPC.AUTRE'], note: 'virement sans miroir sur le compte courant importé : confirme, ou importe le CSV du courant sur la même période' };
-    return { categorie: null, statut: 'a_valider', propositions: ['EPC.AUTRE', 'EPC.INTERETS', 'EPC.FRAIS'] };
+    // v0.9 : rien n'est à valider sur un compte d'épargne — un virement sans miroir est quand même un versement ou un retrait
+    if (/VIREMENT|^VIR |DEPOT|VERSEMENT|RETRAIT/i.test(c)) return { categorie: op.montant > 0 ? 'EPC.VERS' : 'EPC.RETRAIT', interne: true, statut: 'auto', regle_id: 'structurel' };
+    return { categorie: 'EPC.AUTRE', interne: true, statut: 'auto', regle_id: 'structurel' };
   },
   pocheParTag(tag, rules) {
     tag = tag.toUpperCase();
@@ -1803,7 +1808,8 @@ const tests = {
       ['comptes d\'épargne reconnus dans « Libellé Compte » (tolérant) ; inconnu rejeté', () => csv.compte('Livret A') === 'LA' && csv.compte('LIVRET A BOURSOBANK') === 'LA' && csv.compte('Livret d\'Épargne Populaire') === 'LEP' && csv.compte('LEP') === 'LEP' && csv.compte('LDDS') === 'LDDS' && csv.compte('Livret Développement Durable et Solidaire') === 'LDDS' && csv.compte('PEA') === 'PEA' && csv.compte('BoursoBank') === 'perso' && csv.compte('Compte Bourso Business') === 'pro' && csv.compte('Revolut') === null],
       ['solde après opération conservé sur chaque ligne ; id distinct par compte (pas de doublon entre perso et livret)', () => { const r = csv.toOperations(csv.parse(entete + '\n' + ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P, '', `2${NB}100,00`) + '\n' + ligne('2026-10-09', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `5${NB}800,00`)), 't'); return r.ops.length === 2 && r.ops[0].solde === 2100 && r.ops[1].solde === 5800 && r.ops[1].compte === 'LA' && r.ops[0].id !== r.ops[1].id && r.soldes.LA.montant === 5800; }],
       ['livret : versement apparié au virement du perso (EPG.LA ↔ EPC.VERS, interne), retrait apparié (INT.LIVRET ↔ EPC.RETRAIT), intérêts', () => { const j = jeu([ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A'), ligne('2026-10-20', 'VIR Virement depuis LIVRET A', '300,00', P), ligne('2026-10-20', 'VIR Virement vers BoursoBank', '-300,00', 'Livret A'), ligne('2026-12-31', 'INTERETS 2026', '42,10', 'Livret A')]); const v = j.par('VIR Virement vers LIVRET A'), vm = j.par('VIR Virement depuis BoursoBank'), r = j.par('VIR Virement depuis LIVRET A'), rm = j.par('VIR Virement vers BoursoBank'), i = j.par('INTERETS 2026'); return v.categorie === 'EPG.LA' && vm.categorie === 'EPC.VERS' && vm.interne && v.apparie === vm.id && vm.apparie === v.id && r.categorie === 'INT.LIVRET' && rm.categorie === 'EPC.RETRAIT' && rm.apparie === r.id && i.categorie === 'EPC.INTERETS' && i.statut === 'auto'; }],
-      ['livret : virement sans miroir → à valider (EPC.VERS proposé) ; jamais compté dans le bilan perso', () => { const j = jeu([ligne('2026-10-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A'), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-50,00', P)]); const vm = j.par('VIR Virement depuis BoursoBank'); const p = bord.perso(j.d, '2026-10'); return vm.statut === 'a_valider' && vm.propositions[0] === 'EPC.VERS' && p.revenus === 0 && p.depenses === 50; }],
+      ['livret : virement sans miroir → EPC.VERS auto (rien à valider sur un compte d\'épargne), ligne inconnue → EPC.AUTRE auto ; jamais compté dans le bilan perso', () => { const j = jeu([ligne('2026-10-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A'), ligne('2026-10-11', 'REGUL DIVERSE', '1,00', 'Livret A'), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-50,00', P)]); const vm = j.par('VIR Virement depuis BoursoBank'); const p = bord.perso(j.d, '2026-10'); return vm.statut === 'auto' && vm.categorie === 'EPC.VERS' && j.par('REGUL DIVERSE').categorie === 'EPC.AUTRE' && j.d.operations.every(o => o.statut !== 'a_valider') && p.revenus === 0 && p.depenses === 50; }],
+      ['PEA positions : fichier reconnu, date tirée du nom, total = valorisation du mois, positions conservées, fusion entre postes', () => { const NB2 = ' '; const txt = 'name;isin;quantity;buyingPrice;lastPrice;intradayVariation;amount;amountVariation;variation\n"ETF MONDE";IE0000000001;10;100;120;0;"1' + NB2 + '200,00";0;0\n"ETF EMERGENT";FR0000000002;5;20;22;0;110,00;0;0'; const rows = csv.parse(txt); const ok0 = csv.estPositions(rows) && !csv.estPositions(csv.parse(entete)); const p = csv.toPositions(rows, 'export-positions-instantanees-26-10-2026_20-24-37.csv'); const d = modele.dataDefaut('T'); modele.poserPositions(d, p); const pat = stats.patrimoine(d); const e = modele.dataDefaut('U'); const f = modele.fusionner(e, d); return ok0 && p.date === '2026-10-26' && p.total === 1310 && p.positions.length === 2 && d.mensuel['2026-10'].soldes.PEA === 1310 && modele.dernieresPositions(d).positions[0].isin === 'IE0000000001' && pat.dernier.PEA.montant === 1310 && pat.dernier.PEA.source === 'saisie' && f.data.positions.PEA['2026-10-26'].total === 1310; }],
       ['livret : une poche posée sur le virement perso survit à l\'appariement', () => { const j = jeu([ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-800,00', P), ligne('2026-10-09', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A')]); j.par('VIR Virement vers LIVRET A').poche = 'JAPON-2027'; engine.run(j.d, j.r); return j.par('VIR Virement vers LIVRET A').poche === 'JAPON-2027' && j.par('VIR Virement vers LIVRET A').categorie === 'EPG.LA'; }],
       ['PEA : achats de titres et prélèvements sociaux reconnus', () => { const j = jeu([ligne('2026-10-12', 'ACHAT ETF MONDE 12 PARTS', '-480,00', 'PEA'), ligne('2026-10-15', 'PRELEVEMENTS SOCIAUX', '-3,20', 'PEA')]); return j.par('ACHAT ETF MONDE 12 PARTS').categorie === 'EPC.TITRES' && j.par('PRELEVEMENTS SOCIAUX').categorie === 'EPC.FRAIS'; }],
       ['patrimoine : solde CSV de fin de mois par livret, report des mois sans ligne, saisie prioritaire, AV = cumul des versements à défaut de saisie', () => { const j = jeu([ligne('2026-09-10', 'VIR Virement depuis BoursoBank', '800,00', 'Livret A', '', `5${NB}800,00`), ligne('2026-09-25', 'VIR Virement depuis BoursoBank', '200,00', 'Livret A', '', `6${NB}000,00`), ligne('2026-11-03', 'VIR Virement depuis BoursoBank', '100,00', 'Livret A', '', `6${NB}100,00`), ligne('2026-09-15', 'PRLV SEPA LINXEA VIE', '-150,00', P), ligne('2026-10-15', 'PRLV SEPA LINXEA VIE', '-150,00', P)]); j.d.mensuel['2026-10'] = { soldes: { LEP: 4000 } }; const p = stats.patrimoine(j.d); const i = m => p.mois.indexOf(m); return p.mois.join() === '2026-09,2026-10,2026-11' && p.series.LA[i('2026-09')] === 6000 && p.series.LA[i('2026-10')] === 6000 && p.sources.LA[i('2026-10')] === 'report' && p.series.LA[i('2026-11')] === 6100 && p.series.LEP[i('2026-09')] === null && p.series.LEP[i('2026-10')] === 4000 && p.sources.LEP[i('2026-10')] === 'saisie' && p.series.LEP[i('2026-11')] === 4000 && p.series.AV[i('2026-09')] === 150 && p.series.AV[i('2026-10')] === 300 && p.sources.AV[i('2026-10')] === 'versements' && p.dernier.LA.montant === 6100 && p.dernier.LA.source === 'csv' && p.dernier.CRYPTO === null; }],
@@ -1844,10 +1850,10 @@ const idb = {
 const UA = navigator.userAgent || '';
 let machine = localStorage.getItem('budget.machine') || (/iPhone|iPad/.test(UA) ? 'IPHONE' : /Macintosh/.test(UA) ? 'MAC' : /Android/.test(UA) ? 'ANDROID' : 'PC');
 
-const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null, selection: new Set() };
+const etat = { rules: null, data: null, charge: { rules: null, data: null }, dirty: { rules: false, data: false }, editionId: null, selection: new Set(), filtres: { compte: '' } };
 
 function marquer(nom) { etat.dirty[nom] = true; }
-function toutRendre() { rendreEtat(); rendreAccueil(); rendreBoite(); rendreOps(); rendreValidation(); rendreRegles(); rendreCategories(); rendreMensuel(); rendreBord(); rendreGraphes(); majBoutons(); }
+function toutRendre() { rendreEtat(); rendreAccueil(); rendreBoite(); rendreOps(); rendreRegles(); rendreCategories(); rendreMensuel(); rendreBord(); rendreGraphes(); majBoutons(); }
 
 // ---------- stockage : un seul fichier chiffré data/store.json.enc dans le dépôt privé, lu/écrit par l'API GitHub (PC, Mac, téléphone)
 const SYNC_DELAI = 3000, SYNC_RETENTATIVE = 30000;
@@ -2021,7 +2027,7 @@ const ghPrefs = {
   lire() { try { return JSON.parse(localStorage.getItem('budget.github') || 'null'); } catch { return null; } },
   ecrire(o) { if (o) localStorage.setItem('budget.github', JSON.stringify(o)); else localStorage.removeItem('budget.github'); }
 };
-const NAV_PARENT = { boite: 'accueil', validation: 'plus', bord: 'plus', avance: 'plus' };
+const NAV_PARENT = { boite: 'accueil', bord: 'plus', avance: 'plus' };
 function montrerEcran(nom) { const nav = NAV_PARENT[nom] || nom; document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nav)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; window.scrollTo(0, 0); toutRendre(); }
 // écran de connexion seul (nav et écrans masqués) ou application
 function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('hidden', !connecte)); }
@@ -2153,7 +2159,9 @@ async function importerFichiers(files) {
   const resultats = [];
   for (const f of files) {
     if (!/\.csv$/i.test(f.name)) { resultats.push({ fichier: f.name, erreurs: ['pas un .csv'], lues: 0, ops: [], comptes: {} }); continue; }
-    const r = csv.toOperations(csv.parse(await f.text()), f.name);
+    const rows = csv.parse(await f.text());
+    if (csv.estPositions(rows)) { const pz = csv.toPositions(rows, f.name); modele.poserPositions(etat.data, pz); marquer('data'); resultats.push(Object.assign(pz, { comptes: {}, ops: [], inserees: 0, doublons: 0 })); continue; }
+    const r = csv.toOperations(rows, f.name);
     const d = modele.dedup(etat.data.operations, r.ops);
     etat.data.operations.push(...d.inserees);
     r.inserees = d.inserees.length; r.doublons = d.doublons.length;
@@ -2166,12 +2174,12 @@ async function importerFichiers(files) {
   await sauver();
 }
 function rendreImport(res, n) {
-  $('#import-resultat').innerHTML = res.map(r => `
-    <div class="card" style="margin:0 0 8px;background:#fafaf7">
+  $('#import-resultat').innerHTML = res.map(r => r.type === 'positions' ? `<div class="card" style="margin:8px 0;background:#fafaf7"><b>${esc(r.fichier)}</b> — positions ${r.support} au ${r.date} : ${r.positions.length} ligne(s), valorisation <b>${fmtE(r.total)}</b> enregistrée pour ${util.mois(r.date)}${r.erreurs.length ? `<div class="small" style="color:var(--bad)">${r.erreurs.map(esc).join('<br>')}</div>` : ''}</div>` : `
+    <div class="card" style="margin:8px 0;background:#fafaf7">
       <b>${esc(r.fichier)}</b> — ${r.lues} ligne(s) lue(s)${Object.keys(r.comptes).length ? ' (' + Object.entries(r.comptes).map(([c, k]) => `${c} : ${k}`).join(', ') + ')' : ''}
       → <span class="${r.inserees ? 'test-ok' : 'muted'}">${r.inserees ?? 0} insérée(s)</span>, ${r.doublons ?? 0} doublon(s) ignoré(s)
       ${r.erreurs.length ? `<div class="small" style="color:var(--bad);margin-top:6px">${r.erreurs.length} ligne(s) rejetée(s) :<ul style="margin:4px 0 0 18px">${r.erreurs.slice(0, 20).map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
-    </div>`).join('') + (n ? `<p class="small"><b>${n}</b> ligne(s) à valider → onglet <b>Validation</b>.</p>` : '<p class="small test-ok">Toutes les lignes sont catégorisées.</p>');
+    </div>`).join('') + (n ? `<p class="small"><b>${n}</b> ligne(s) à confirmer → <b>Accueil › boîte de réception</b>.</p>` : '<p class="small test-ok">Toutes les lignes sont catégorisées.</p>');
 }
 
 // ---------- rendu : état, opérations
@@ -2194,20 +2202,32 @@ function catHtml(o) {
   if (o.propositions.length) return `<span class="cat prop" title="${esc(libelleCat(o.propositions[0]))}">${esc(o.propositions[0])} ?</span>`;
   return '<span class="cat vide">—</span>';
 }
+let opsLimite = 150;
 function rendreOps() {
-  const tb = $('#ops tbody');
-  if (!etat.data) { tb.innerHTML = ''; $('#ops-count').textContent = ''; return; }
-  const fc = $('#f-compte').value, fs = $('#f-statut').value, ft = norm.stripAccents($('#f-texte').value).toUpperCase();
-  let ops = etat.data.operations.filter(o => (!fc || (fc === 'epargne' ? csv.estEpargne(o.compte) : o.compte === fc)) && (!fs || o.statut === fs) && (!ft || norm.stripAccents(o.libelle + ' ' + (o.categorie || '')).toUpperCase().includes(ft)));
-  ops = ops.slice().sort((a, b) => b.date_op.localeCompare(a.date_op) || a.compte.localeCompare(b.compte));
-  $('#ops-count').textContent = `(${ops.length} / ${etat.data.operations.length})`;
-  const max = 300;
-  tb.innerHTML = ops.slice(0, max).map(o => `<tr class="clic" data-id="${o.id}"><td>${o.date_op}</td><td>${o.compte}</td><td>${esc(o.libelle)}${o.annotation.tiers ? `<br><span class="muted small">${esc(o.annotation.tiers)}</span>` : ''}</td><td>${catHtml(o)}</td><td class="muted">${o.compte === 'pro' ? (o.entite || (o.categorie && /^(HON|PREL\.KINE)/.test(o.categorie) ? 'ventilée' : '')) : ''}</td><td><span class="badge ${o.statut === 'a_valider' ? 'warn' : o.statut === 'valide' ? 'ok' : 'gris'}">${o.statut === 'a_valider' ? 'à valider' : o.statut}</span></td><td class="num ${o.montant < 0 ? 'neg' : 'pos'}">${util.montantFr(o.montant)}</td></tr>${etat.editionId === o.id ? `<tr><td colspan="7">${editeurHtml(o)}</td></tr>` : ''}`).join('');
-  $('#ops-more').textContent = ops.length > max ? `${ops.length - max} opération(s) non affichée(s) : affine le filtre.` : '';
-  tb.querySelectorAll('tr.clic').forEach(tr => tr.onclick = () => { etat.editionId = etat.editionId === tr.dataset.id ? null : tr.dataset.id; rendreOps(); brancherEditeur(tb); });
-  brancherEditeur(tb);
+  const z = $('#ops-liste');
+  if (!etat.data) { z.innerHTML = '<p class="muted small">Connecte-toi, puis importe des CSV.</p>'; $('#ops-count').textContent = ''; return; }
+  const fc = etat.filtres.compte, fa = $('#f-aconfirmer').checked, ft = norm.stripAccents($('#f-texte').value).toUpperCase().trim();
+  const num = ft && /^-?[\d\s]+([.,]\d+)?$/.test(ft) ? Number(ft.replace(/\s/g, '').replace(',', '.')) : null;
+  let ops = etat.data.operations.filter(o => (!fc || (fc === 'epargne' ? csv.estEpargne(o.compte) : o.compte === fc)) && (!fa || o.statut === 'a_valider')
+    && (!ft || (num !== null ? util.cents(o.montant) === util.cents(num) : norm.stripAccents(norm.nomLisible(o) + ' ' + o.libelle + ' ' + (o.categorie || '') + ' ' + libelleCourt(o.categorie) + ' ' + (o.annotation.tiers || '')).toUpperCase().includes(ft))));
+  ops.sort((a, b) => b.date_op.localeCompare(a.date_op) || a.compte.localeCompare(b.compte));
+  $('#ops-count').textContent = `${ops.length} / ${etat.data.operations.length}`;
+  const vus = ops.slice(0, opsLimite); let jour = null, html = '';
+  const jourLisible = (d) => { const x = new Date(d + 'T00:00:00Z'); const t = x.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+  for (const o of vus) {
+    if (o.date_op !== jour) { jour = o.date_op; const tot = ops.filter(x => x.date_op === jour && (x.compte === 'perso' || x.compte === 'pro') && !x.interne).reduce((s, x) => s + x.montant, 0); html += `<div class="grp" style="display:flex;justify-content:space-between;color:var(--muted);font-size:13px"><span>${jourLisible(jour)}</span><span>${tot ? util.montantFr(Math.round(tot * 100) / 100) + ' €' : ''}</span></div>`; }
+    const fam = o.categorie ? o.categorie.split('.')[0] : 'NC';
+    const sous = [o.compte === 'perso' ? '' : o.compte === 'pro' ? 'pro' : SUPPORTS_LIBELLES[o.compte] || o.compte, libelleCourt(o.categorie), o.poche, o.compte === 'pro' ? (o.entite || (o.categorie && /^(HON|PREL\.KINE)/.test(o.categorie) ? 'ventilée' : '')) : '', o.annotation.tiers].filter(Boolean).join(' · ');
+    html += `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${esc(sous)}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`;
+  }
+  z.innerHTML = html || '<p class="muted small">aucune opération</p>';
+  $('#ops-more').innerHTML = ops.length > opsLimite ? `${ops.length - opsLimite} de plus — <a href="#" id="ops-plus">afficher la suite</a>` : '';
+  const plus = $('#ops-plus'); if (plus) plus.onclick = (e) => { e.preventDefault(); opsLimite += 150; rendreOps(); };
+  z.querySelectorAll('.ligne-op.clic').forEach(el => el.onclick = () => { etat.editionId = etat.editionId === el.dataset.id ? null : el.dataset.id; rendreOps(); });
+  brancherEditeur(z);
 }
-$('#f-compte').onchange = $('#f-statut').onchange = rendreOps; $('#f-texte').oninput = rendreOps;
+$('#f-comptes').querySelectorAll('button').forEach(b => b.onclick = () => { etat.filtres.compte = b.dataset.v; $('#f-comptes').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); opsLimite = 150; rendreOps(); });
+$('#f-aconfirmer').onchange = () => { opsLimite = 150; rendreOps(); }; $('#f-texte').oninput = () => { opsLimite = 150; rendreOps(); };
 
 // ---------- éditeur de ligne (validation et correction)
 function optionsCat(o, selection) {
@@ -2256,58 +2276,6 @@ function brancherEditeur(root) {
     };
   });
 }
-
-// ---------- file de validation
-function rendreValidation() {
-  if (!etat.data) { $('#val-liste').innerHTML = '<p class="muted">Importe des CSV.</p>'; return; }
-  const f = engine.file(etat.data);
-  const total = f.sans.length + f.avec.length + f.credits.length;
-  $('#val-resume').textContent = total ? `${total} ligne(s) à traiter` : 'rien à valider';
-  for (const id of [...etat.selection]) if (!etat.data.operations.some(o => o.id === id && o.statut !== 'valide')) etat.selection.delete(id);
-  const ligneHtml = o => `<tr class="clic" data-id="${o.id}"><td><input type="checkbox" class="v-sel" data-id="${o.id}"${etat.selection.has(o.id) ? ' checked' : ''}></td><td>${o.date_op}</td><td>${o.compte}</td><td>${esc(o.libelle)}</td><td>${catHtml(o)}${o.note ? `<br><span class="small muted">${esc(o.note)}</span>` : ''}</td><td class="num ${o.montant < 0 ? 'neg' : 'pos'}">${util.montantFr(o.montant)}</td><td><button class="b small v-ok" ${o.propositions.length ? '' : 'disabled'}>Valider</button></td></tr>${etat.editionId === o.id ? `<tr><td colspan="7">${editeurHtml(o)}</td></tr>` : ''}`;
-  const bloc = (titre, liste) => liste.length ? `<p class="grp"><input type="checkbox" class="v-tous" data-ids="${liste.map(o => o.id).join(',')}"${liste.every(o => etat.selection.has(o.id)) ? ' checked' : ''} title="tout cocher"> ${titre} (${liste.length})</p><table><tbody>${liste.sort((a, b) => a.date_op.localeCompare(b.date_op)).map(ligneHtml).join('')}</tbody></table>` : '';
-  const aff = stats.aAffecter(etat.data, etat.rules), ctrl = stats.controle(etat.data, etat.rules);
-  const extra = (aff.length ? `<p class="grp">4. Virements vers livrets à affecter (${aff.length})</p><p class="small muted">→ onglet Mensuel</p>` : '') + (ctrl.alertes.length ? `<p class="grp">5. Poches au-delà du solde</p>${ctrl.alertes.map(a => `<p class="small" style="color:var(--bad)">${esc(a)}</p>`).join('')}` : '');
-  $('#val-liste').innerHTML = (total ? bloc('1. Sans catégorie : choisis', f.sans) + bloc('2. Proposition à confirmer', f.avec) + bloc('3. Crédits de particuliers sur le pro', f.credits) : '<p class="test-ok">Toutes les lignes sont catégorisées.</p>') + extra;
-  rendreLot();
-  const root = $('#val-liste');
-  root.querySelectorAll('tr.clic').forEach(tr => tr.onclick = () => { etat.editionId = etat.editionId === tr.dataset.id ? null : tr.dataset.id; rendreValidation(); });
-  root.querySelectorAll('.v-sel').forEach(c => { c.onclick = e => e.stopPropagation(); c.onchange = () => { c.checked ? etat.selection.add(c.dataset.id) : etat.selection.delete(c.dataset.id); rendreValidation(); }; });
-  root.querySelectorAll('.v-tous').forEach(c => c.onchange = () => { for (const id of c.dataset.ids.split(',')) c.checked ? etat.selection.add(id) : etat.selection.delete(id); rendreValidation(); });
-  root.querySelectorAll('.v-ok').forEach(b => b.onclick = async (e) => {
-    e.stopPropagation();
-    const o = etat.data.operations.find(x => x.id === b.closest('tr').dataset.id);
-    const r = engine.corriger(etat.data, etat.rules, machine, o, { categorie: o.propositions[0], entite: o.compte === 'pro' ? (o.entite ?? engine.entiteDefaut(o.propositions[0]) ?? '') : undefined, poche: o.poche, montant: /MACSF/.test(o.cle), etendre: (o.compte === 'pro' && o.montant > 0 && norm.tiers(o.libelle)) ? 'tiers' : 'exact' });
-    marquer('data'); marquer('rules'); recategoriser();
-    toast(`${o.propositions[0] || o.categorie} — règle ${r ? r.id : '—'}`, 'ok'); await sauver();
-  });
-  brancherEditeur(root);
-}
-// barre d'action : attribuer d'un coup une catégorie (et entité, poche) à toutes les lignes cochées ; une règle « ce libellé » par ligne, sauf si décoché
-function rendreLot() {
-  const n = etat.selection.size, bar = $('#val-lot');
-  bar.classList.toggle('hidden', !n); if (!n) return;
-  const ops = etat.data.operations.filter(o => etat.selection.has(o.id));
-  const pro = ops.some(o => o.compte === 'pro'), perso = ops.some(o => o.compte === 'perso');
-  const faux = { compte: pro && !perso ? 'pro' : 'perso', propositions: [] };
-  const cat = $('#lot-cat'), ent = $('#lot-ent'), poche = $('#lot-poche');
-  const catAvant = cat.value;
-  cat.innerHTML = '<option value="">catégorie…</option>' + optionsCat(faux, catAvant);
-  cat.value = catAvant;
-  ent.classList.toggle('hidden', !pro); if (pro) ent.innerHTML = '<option value="">entité : ventilée</option>' + ENTITES.map(e => `<option value="${e}">${e}</option>`).join('');
-  poche.innerHTML = '<option value="">poche : —</option>' + etat.rules.poches.map(p => `<option value="${p.tag}">${p.tag}</option>`).join('');
-  $('#lot-n').textContent = n;
-}
-$('#lot-ok').onclick = async () => {
-  const categorie = $('#lot-cat').value; if (!categorie) { toast('Choisis une catégorie', 'bad'); return; }
-  const ops = etat.data.operations.filter(o => etat.selection.has(o.id));
-  const entite = $('#lot-ent').classList.contains('hidden') ? '' : $('#lot-ent').value, poche = $('#lot-poche').value, creerRegle = $('#lot-regle').checked;
-  let regles = 0;
-  for (const o of ops) { const r = engine.corriger(etat.data, etat.rules, machine, o, { categorie, entite: o.compte === 'pro' ? entite : undefined, poche, etendre: 'exact', montant: /MACSF/.test(o.cle), creerRegle }); if (r) regles++; }
-  etat.selection.clear(); etat.editionId = null; marquer('data'); marquer('rules'); recategoriser();
-  toast(`${ops.length} ligne(s) → ${categorie}${creerRegle ? `, ${regles} règle(s)` : ''}`, 'ok'); await sauver();
-};
-$('#lot-annuler').onclick = () => { etat.selection.clear(); rendreValidation(); };
 
 // ---------- règles
 function rendreRegles() {
@@ -2425,14 +2393,6 @@ function rendreBord() {
     <tr><td>Épargne et investissement <span class="cat">EPG</span></td><td class="num">${fmtE(cur.epargne)}</td><td class="num">${moy(b.tot.epargne)}</td></tr>
     <tr><td><b>Taux d'épargne</b> (épargne ÷ revenus)</td><td class="num"><b>${pct(cur.taux)}</b></td><td class="num">${pct(b.tot.revenus > 0 ? Math.round(b.tot.epargne / b.tot.revenus * 1000) / 10 : null)}</td></tr>
     <tr><td class="muted">Reste (revenus, non catégorisés compris − dépenses − épargne)</td><td class="num muted">${fmtE(Math.round((cur.revenus + cur.revenusNC - cur.depenses - cur.epargne) * 100) / 100)}</td><td class="num muted">${moy(b.tot.revenus + b.tot.revenusNC - b.tot.depenses - b.tot.epargne)}</td></tr></tbody></table>`;
-  // budget
-  const bc = etat.rules.config.budget_cible || {};
-  $('#b-budget tbody').innerHTML = b.lignes.map(l => {
-    const fam = l.niveau === 'famille' || l.niveau === 'total' || l.niveau === 'epargne';
-    const nom = l.code === 'NC' ? 'Non catégorisé (à valider)' : l.code === 'TOTAL' ? 'Total dépenses' : l.code === 'EPG' ? 'Épargne et investissement (cible)' : fam ? FAMILLES[l.code] : (CAT[l.code] || {}).libelle || l.code;
-    const saisie = l.code === 'NC' || l.code === 'TOTAL' ? '' : `<input type="number" step="1" min="0" class="b-cible" data-code="${l.code}" value="${bc[l.code] ?? ''}" placeholder="${l.niveau === 'famille' && l.cible !== null && bc[l.code] == null ? 'Σ ' + l.cible : ''}" style="width:90px;text-align:right">`;
-    return `<tr${fam ? ' style="font-weight:600;background:#fafaf7"' : ''}><td${fam ? '' : ' style="padding-left:28px"'}><span class="cat" title="${esc(libelleCat(l.code) || nom)}">${l.code === 'NC' ? '—' : l.code}</span> ${esc(nom)}</td><td class="num">${fmtE(l.realise)}</td><td class="num muted">${fmtE(l.moyenne)}</td><td class="num">${saisie}</td>${ecartTd(l.ecart, l.code === 'EPG')}</tr>`;
-  }).join('');
   // taux d'épargne par mois
   $('#b-mensuel tbody').innerHTML = bord.moisCompte(etat.data, 'perso').slice().reverse().map(mm => { const p = bord.perso(etat.data, mm); return `<tr${mm === m ? ' style="background:#fafaf7"' : ''}><td>${mm}</td><td class="num">${fmtE(p.revenus)}</td><td class="num">${fmtE(p.depenses)}</td><td class="num">${fmtE(p.epargne)}</td><td class="num"><b>${pct(p.taux)}</b></td><td class="num muted">${p.depensesNC || p.revenusNC ? fmtE(p.depensesNC) + ' débit / ' + fmtE(p.revenusNC) + ' crédit' : '—'}</td></tr>`; }).join('') || '<tr><td colspan="6" class="muted">aucune opération perso</td></tr>';
   // pro
@@ -2476,12 +2436,6 @@ function rendreBord() {
   });
 }
 $('#b-mois').onchange = () => { moisBord = $('#b-mois').value; rendreBord(); };
-$('#b-budget-ok').onclick = async () => {
-  if (!etat.rules) return;
-  const bc = {};
-  $('#b-budget').querySelectorAll('.b-cible').forEach(i => { const v = i.value.trim(); if (v !== '' && Number(v) >= 0) bc[i.dataset.code] = Number(v); });
-  etat.rules.config.budget_cible = bc; marquer('rules'); toast(`Budget enregistré : ${Object.keys(bc).length} cible(s)`, 'ok'); await sauver();
-};
 $('#b-prov-ok').onclick = async () => {
   if (!etat.rules) return;
   const pv = {};
