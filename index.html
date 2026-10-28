@@ -48,6 +48,7 @@ nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9p
 .ligne-op .ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none;color:#fff}
 .ligne-op .txt{flex:1;min-width:0}.ligne-op .txt small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ligne-op .mt{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.ligne-op.clic:hover{background:#fafaf7}.ligne-op .crayon{color:var(--muted);font-size:14px;opacity:.55;flex:none;width:22px;text-align:center}.ligne-op.clic:hover .crayon{opacity:1;color:var(--acc)}
 .boite-card{max-width:560px;margin:0 auto}
 .boite-card .nom{font-size:20px;font-weight:700;margin:4px 0}
 .boite-card .prop{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;margin:8px 0}
@@ -380,7 +381,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.10.3';
+const APP_VERSION = '0.10.4';
 const SCHEMA = 1;
 
 const util = {
@@ -2480,7 +2481,7 @@ function rendreOps() {
     if (o.date_op !== jour) { jour = o.date_op; html += `<div class="grp" style="display:flex;justify-content:space-between;color:var(--muted);font-size:13px"><span>${jourLisible(jour)}</span></div>`; }
     const fam = o.categorie ? o.categorie.split('.')[0] : 'NC';
     const sous = [o.compte === 'perso' ? '' : o.compte === 'pro' ? 'pro' : SUPPORTS_LIBELLES[o.compte] || o.compte, libelleCourt(o.categorie), o.annotation.tiers].filter(Boolean).join(' · ');
-    html += `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${esc(sous)}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`;
+    html += `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${esc(sous)}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span><span class="crayon" title="corriger la catégorie">✎</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`;
   }
   z.innerHTML = html || '<p class="muted small">aucune opération</p>';
   $('#ops-more').innerHTML = ops.length > opsLimite ? `${ops.length - opsLimite} de plus — <a href="#" id="ops-plus">afficher la suite</a>` : '';
@@ -2511,7 +2512,6 @@ function editeurHtml(o) {
     <div class="row">
       <label>Catégorie <select class="e-cat">${optionsCat(o, sel)}</select></label>
       ${o.compte === 'pro' ? `<label>Entité <select class="e-ent"><option value="">ventilée Nice/EHPAD</option>${ENTITES.map(e => `<option${o.entite === e ? ' selected' : ''}>${e}</option>`).join('')}</select></label>` : ''}
-      <label>Poche <select class="e-poche"><option value="">—</option>${etat.rules.poches.map(p => `<option${o.poche === p.tag ? ' selected' : ''}>${p.tag}</option>`).join('')}</select></label>
       <label>Tiers / note <input type="text" class="e-tiers" value="${esc(o.annotation.tiers || tiers || '')}" placeholder="nom du tiers" style="width:160px"></label>
     </div>
     <div class="row">
@@ -2531,7 +2531,7 @@ function brancherEditeur(root) {
     div.onclick = e => e.stopPropagation();
     div.querySelector('.e-ok').onclick = async () => {
       const categorie = div.querySelector('.e-cat').value; if (!categorie) { toast('Choisis une catégorie', 'bad'); return; }
-      const choix = { categorie, entite: div.querySelector('.e-ent') ? div.querySelector('.e-ent').value : undefined, poche: div.querySelector('.e-poche').value, tiers: div.querySelector('.e-tiers').value.trim(), etendre: div.querySelector(`input[name="et-${id}"]:checked`).value, montant: div.querySelector('.e-montant').checked, creerRegle: !div.querySelector('.e-sansregle').checked };
+      const choix = { categorie, entite: div.querySelector('.e-ent') ? div.querySelector('.e-ent').value : undefined, poche: o.poche, tiers: div.querySelector('.e-tiers').value.trim(), etendre: div.querySelector(`input[name="et-${id}"]:checked`).value, montant: div.querySelector('.e-montant').checked, creerRegle: !div.querySelector('.e-sansregle').checked };
       annulation.avant([o], `${norm.nomLisible(o)} → ${libelleCourt(categorie)}`);
       const r = engine.corriger(etat.data, etat.rules, machine, o, choix);
       marquer('data'); marquer('rules'); etat.editionId = null;
@@ -2891,7 +2891,7 @@ function rendreGrDetail(liste) {
   const max = 80;
   $('#gr-detail-titre').innerHTML = `${esc(d.libelle)} <span class="muted small">${esc(graphes.libellePeriode({ mode: an.mode, valeur: an.valeur }))} · ${ops.length} ligne(s) · ${fmtE(Math.round(ops.reduce((s, o) => s + o.montant, 0) * 100) / 100)}</span>`;
   const tb = $('#gr-detail');
-  tb.innerHTML = ops.slice(0, max).map(o => { const fam = o.categorie ? o.categorie.split('.')[0] : 'NC'; return `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${o.date_op} · ${esc(libelleCourt(o.categorie))}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`; }).join('') || '<p class="muted small">aucune ligne</p>';
+  tb.innerHTML = ops.slice(0, max).map(o => { const fam = o.categorie ? o.categorie.split('.')[0] : 'NC'; return `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${o.date_op} · ${esc(libelleCourt(o.categorie))}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span><span class="crayon" title="corriger la catégorie">✎</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`; }).join('') || '<p class="muted small">aucune ligne</p>';
   $('#gr-detail-more').textContent = ops.length > max ? `${ops.length - max} ligne(s) de plus dans Opérations.` : '';
   tb.querySelectorAll('.ligne-op.clic').forEach(el => el.onclick = () => { etat.editionId = etat.editionId === el.dataset.id ? null : el.dataset.id; rendreGrDetail(liste); });
   brancherEditeur(tb);
