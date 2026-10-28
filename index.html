@@ -378,7 +378,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.10.1';
+const APP_VERSION = '0.10.2';
 const SCHEMA = 1;
 
 const util = {
@@ -2855,15 +2855,17 @@ function rendreAnalyse() {
   if (opts.length) { if (!opts.includes(an.valeur)) { const mp = bord.moisCompte(etat.data, 'perso'); const dern = an.mode === 'mois' ? mp[mp.length - 1] : (mp[mp.length - 1] || '').slice(0, 4); an.valeur = opts.includes(dern) ? dern : opts[0]; } val.innerHTML = opts.map(v => `<option value="${v}"${v === an.valeur ? ' selected' : ''}>${an.mode === 'mois' ? moisLisible(v) : v}</option>`).join(''); }
   const liste = anMois();
   rendreSankey('s-analyse', graphes.sankeyPerso(etat.data, liste, an.deplie), (n) => {
-    if (n.type === 'dep' && n.name !== 'NC') { if (an.deplie.has(n.name)) an.deplie.delete(n.name); else an.deplie.add(n.name); an.detail = { code: n.name, libelle: n.libelle }; rendreAnalyse(); return; }
-    if (n.type === 'hub') { an.detail = { code: 'REV', libelle: 'Revenus' }; rendreAnalyse(); return; }
     if (/^(Reste|Puisé)$/.test(n.name)) return;
-    an.detail = { code: n.name === 'Épargne' ? 'EPG' : n.name === 'REV.NC' ? 'NC' : n.name, libelle: n.libelle }; rendreAnalyse();
+    if (n.type === 'dep' && n.name !== 'NC') { if (an.deplie.has(n.name)) an.deplie.delete(n.name); else an.deplie.add(n.name); an.detail = { code: n.name, libelle: n.libelle }; }
+    else if (n.type === 'hub') an.detail = { code: 'REV', libelle: 'Revenus' };
+    else an.detail = { code: n.name === 'Épargne' ? 'EPG' : n.name === 'REV.NC' ? 'NC' : n.name, libelle: n.libelle };
+    rendreAnalyse(); setTimeout(() => { const c = $('#gr-detail-card'); if (c && !c.classList.contains('hidden')) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 500);
   }, { deplie: an.deplie, cle: an.mode + an.valeur });
   rendreGrDetail(liste);
   // 12 mois : trois courbes sobres
   const douze = graphes.moisPeriode(etat.data, { mode: 'glissant' }); const ev = graphes.persoMensuel(etat.data, douze);
-  chart('c-12mois', { type: 'line', data: { labels: douze.map(m => m.slice(2).replace('-', '/')), datasets: [{ label: 'Revenus', data: ev.map(e => e.revenus), borderColor: '#1d7a4d', backgroundColor: '#1d7a4d', tension: .3, pointRadius: 3 }, { label: 'Dépenses', data: ev.map(e => e.depenses), borderColor: '#b4342c', backgroundColor: '#b4342c', tension: .3, pointRadius: 3 }, { label: 'Épargne', data: ev.map(e => e.epargne), borderColor: '#2b5db3', backgroundColor: '#2b5db3', tension: .3, pointRadius: 3 }] },
+  const moisCourt = (m) => { const d = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)) - 1, 1)); const t = d.toLocaleDateString('fr-FR', { month: 'short', timeZone: 'UTC' }).replace('.', ''); return m.endsWith('-01') || m === douze[0] ? `${t} ${m.slice(2, 4)}` : t; };
+  chart('c-12mois', { type: 'line', data: { labels: douze.map(moisCourt), datasets: [{ label: 'Revenus', data: ev.map(e => e.revenus), borderColor: '#1d7a4d', backgroundColor: '#1d7a4d', tension: .25, pointRadius: 3 }, { label: 'Dépenses', data: ev.map(e => e.depenses), borderColor: '#b4342c', backgroundColor: '#b4342c', tension: .25, pointRadius: 3 }, { label: 'Épargne', data: ev.map(e => e.epargne), borderColor: '#2b5db3', backgroundColor: '#2b5db3', tension: .25, pointRadius: 3 }] },
     options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v.toLocaleString('fr-FR') }, grid: { color: '#eeede8' } } }, plugins: { legend: { position: 'bottom' }, tooltip: tipEuro }, onClick: (e, els) => { if (els.length) { an.mode = 'mois'; an.valeur = douze[els[0].index]; rendreAnalyse(); } } } });
 }
 function rendreGrDetail(liste) {
