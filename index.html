@@ -381,7 +381,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.10.4';
+const APP_VERSION = '0.10.5';
 const SCHEMA = 1;
 
 const util = {
@@ -865,6 +865,7 @@ const modele = {
     if (!data.soldes) { data.soldes = {}; modif = true; }
     if (!data.positions) { data.positions = {}; modif = true; }
     if (!data.doctolib) { data.doctolib = {}; modif = true; }
+    if (!data.seances) { data.seances = {}; modif = true; }
     for (const p of rules.poches) { if (!p.ajustements) { p.ajustements = []; modif = true; } if (p.actif === undefined) { p.actif = true; modif = true; } }
     for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } if (o.solde === undefined) { o.solde = null; modif = true; } }
     return modif;
@@ -925,6 +926,8 @@ const modele = {
       res.mensuel[m] = r;
     }
     modele.majSoldes(res, ici.soldes); modele.majSoldes(res, autre.soldes);
+    res.seances = JSON.parse(JSON.stringify(ici.seances || {}));
+    for (const [id, c] of Object.entries(autre.seances || {})) { const d = res.seances[id]; if (!d || (c.s === 'F' && d.s !== 'F')) res.seances[id] = JSON.parse(JSON.stringify(c)); }
     res.doctolib = JSON.parse(JSON.stringify(ici.doctolib || {}));
     for (const [m, v] of Object.entries(autre.doctolib || {})) if (!res.doctolib[m] || (v.importe_le || '') > (res.doctolib[m].importe_le || '')) res.doctolib[m] = JSON.parse(JSON.stringify(v));
     res.positions = JSON.parse(JSON.stringify(ici.positions || {}));
@@ -1628,6 +1631,27 @@ const doctolib = {
     for (const e of Object.values(ent)) for (const k of ['ca', 'facture', 'aFacturer', 'ik', 'caCabinet', 'caDomicile', 'factureCabinet', 'factureDomicile']) e[k] = Math.round(e[k] * 100) / 100;
     return { mois: m, entites: ent, actes: Object.values(actes).map(a => Object.assign(a, { ca: Math.round(a.ca * 100) / 100 })).sort((a, b) => b.ca - a.ca), jours: Object.values(jours).sort((a, b) => a.date.localeCompare(b.date)).map(j => Object.assign(j, { ca: Math.round(j.ca * 100) / 100 })), doublons: fusion.doublons, agendasInconnus: fusion.agendasInconnus, importe_le: util.nowIso().slice(0, 10) };
   },
+  // v0.10.5 : les séances sont conservées ANONYMISÉES dans data.seances[id] (Session ID, date, statut, CA, agenda, domicile, IK, bilan — jamais le patient),
+  // ce qui permet de recalculer les agrégats à tout moment : export d'une seule structure réimporté plus tard, changement de la légende des agendas, nouveau calcul.
+  compact(s) { return { d: s.date, s: s.statut === 'Facturée' ? 'F' : /associer/i.test(s.statut) ? 'A' : 'X', ca: s.ca, ag: s.agenda, dom: s.domicile ? 1 : 0, ik: s.ik || 0, bil: s.bilan ? 1 : 0, act: (s.actes || '').split('+')[0].trim().split(' ')[0] || '?' }; },
+  decompact(id, c) { return { id, date: c.d, statut: c.s === 'F' ? 'Facturée' : c.s === 'A' ? 'À associer' : 'À facturer', ca: c.ca, agenda: c.ag, domicile: !!c.dom, ik: c.ik || 0, bilan: !!c.bil, actes: c.act || '?' }; },
+  // intègre des exports dans le stock (union par id, « Facturée » gagne), recalcule et pose les mois touchés ; renvoie les mois recalculés
+  integrer(data, exports, rules) {
+    if (!data.seances) data.seances = {};
+    const touches = new Set(); let doublons = 0;
+    for (const e of exports) for (const s of e.seances) { const c = doctolib.compact(s); const d = data.seances[s.id]; if (d) { doublons++; if (c.s === 'F' || d.s !== 'F') data.seances[s.id] = c; } else data.seances[s.id] = c; touches.add(s.date.slice(0, 7)); }
+    for (const m of touches) doctolib.recalculer(data, rules, m);
+    return { mois: [...touches].sort(), doublons };
+  },
+  stock(data, rules, m) { const ag = doctolib.agendas(rules); return Object.entries(data.seances || {}).filter(([id, c]) => c.d.slice(0, 7) === m).map(([id, c]) => Object.assign(doctolib.decompact(id, c), { entite: ag[c.ag] || null })).sort((a, b) => a.date.localeCompare(b.date)); },
+  recalculer(data, rules, m) {
+    const seances = doctolib.stock(data, rules, m); if (!seances.length) return null;
+    const anc = (data.doctolib || {})[m] || {};
+    const agg = doctolib.agreger({ seances, doublons: anc.doublons || 0, agendasInconnus: [...new Set(seances.filter(s => !s.entite).map(s => s.agenda))] }, m);
+    agg.importe_le = anc.importe_le || agg.importe_le; agg.source = 'seances';
+    doctolib.poser(data, agg); return agg;
+  },
+  recalculerTout(data, rules) { const mois = new Set(Object.values(data.seances || {}).map(c => c.d.slice(0, 7))); for (const m of mois) doctolib.recalculer(data, rules, m); return mois.size; },
   // enregistre les agrégats dans data.doctolib[mois] et pose les totaux de ventilation (§3.9) : doctolib_nice / doctolib_ehpad = CA par entité
   poser(data, agg) {
     if (!data.doctolib) data.doctolib = {};
@@ -1647,8 +1671,8 @@ const pro = {
     const c = pro.cfg(rules); const agg = (data.doctolib || {})[m] || null; const ops = data.operations.filter(o => o.compte === 'pro' && util.mois(o.date_op) === m);
     const somme = (re) => pro.r2(ops.filter(o => re.test(o.categorie || '')).reduce((s, o) => s + Math.abs(o.montant), 0));
     const N = agg ? agg.entites.NICE : null, E = agg ? agg.entites.EHPAD : null;
-    const nice = { facture: N ? N.facture : null, factureCabinet: N ? N.factureCabinet : null, factureDomicile: N ? N.factureDomicile : null, aFacturer: N ? N.aFacturer : null, ca: N ? N.ca : null, seances: N ? N.seances : null,
-      retroPrevue: N ? pro.r2(N.factureCabinet * c.nice_cabinet / 100 + N.factureDomicile * c.nice_domicile / 100) : null, retroPrevueCA: N ? pro.r2(N.caCabinet * c.nice_cabinet / 100 + N.caDomicile * c.nice_domicile / 100) : null, retroPayee: somme(/^RETRO\.RIQUIER$/) };
+    const nice = { facture: N ? N.facture : null, factureCabinet: N && N.factureCabinet !== undefined ? N.factureCabinet : null, factureDomicile: N && N.factureDomicile !== undefined ? N.factureDomicile : null, aFacturer: N ? N.aFacturer : null, ca: N ? N.ca : null, seances: N ? N.seances : null,
+      retroPrevue: N && N.factureCabinet !== undefined ? pro.r2(N.factureCabinet * c.nice_cabinet / 100 + N.factureDomicile * c.nice_domicile / 100) : null, retroPrevueCA: N && N.caCabinet !== undefined ? pro.r2(N.caCabinet * c.nice_cabinet / 100 + N.caDomicile * c.nice_domicile / 100) : null, retroPayee: somme(/^RETRO\.RIQUIER$/) };
     const ehpad = { facture: E ? E.facture : null, aFacturer: E ? E.aFacturer : null, ca: E ? E.ca : null, seances: E ? E.seances : null, retroFixe: c.ehpad_fixe, retroPayee: somme(/^RETRO\.EHPAD$/),
       autorise: E ? pro.r2(Math.max(0, E.facture - c.ehpad_fixe) * c.ehpad_part / 100) : null };
     return { mois: m, doctolib: !!agg, nice, ehpad, verse: somme(/^PREL\./), encaisse: somme(/^(HON|ENT)\./), charges: somme(/^(RETRO|FRAIS|DEPL)\.|^REPAS$|^COT\.INDU$/), cotisations: somme(/^COT\.(?!INDU)/), cfg: c };
@@ -2032,6 +2056,7 @@ const tests = {
       ['Doctolib : deux exports fusionnés sur Session ID, séances non facturées comptées une fois, CA par structure via l\'agenda, totaux de ventilation posés, aucun nom conservé', () => { const H = ['Statut', 'Date de séance', 'Patient', "Chiffre d'affaires", 'Actes', 'Traitement', 'Numéro de facture', 'Date de la facture', 'Type de facture', 'Au cabinet', 'HN', "Dépassements d'honoraires", 'Bilans', 'À domicile', 'Indemnités kilométriques', 'Balnéothérapie', "Propriétaire de l'agenda", "Nom de l'agenda", 'Remplaçant', 'Session ID']; const L = (st, d, pat, ca, ag, id) => [st, d, pat, ca, 'RPE 8.5', 'x', st === 'Facturée' ? '245' : '-', st === 'Facturée' ? d : '-', st === 'Facturée' ? 'FSE' : '-', ca, '-', '-', '-', '-', '-', '-', 'Maxime Belkadi', ag, '-', id]; const feuillesA = [{ nom: 'Synthèse', rows: [['SYNTHÈSE'], ['Structure de facturation', 'MAXIME BELKADI 06701918']] }, { nom: "Détails du chiffre d'affaires", rows: [["DÉTAILS"], ['Période', '01/10/2026 - 28/10/2026'], H, L('Facturée', '01/10/2026', 'A B', 18.79, 'Maxime', 's1'), L('À facturer', '02/10/2026', 'C D', 18.79, 'Maxime', 's2'), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')] }]; const feuillesB = [{ nom: "Détails du chiffre d'affaires", rows: [["DÉTAILS"], H, L('Facturée', '04/10/2026', 'G H', 18.79, 'Belkadi Maxime', 's4'), L('À facturer', '02/10/2026', 'C D', 18.79, 'Maxime', 's2'), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')] }]; const a = doctolib.lire(feuillesA), b = doctolib.lire(feuillesB); const f = doctolib.fusionner([a, b], modele.rulesDefaut('T')); const agg = doctolib.agreger(f, '2026-10'); const d = modele.dataDefaut('T'); doctolib.poser(d, agg); const js = JSON.stringify(d); return doctolib.estExport(feuillesA) && a.structure === 'MAXIME BELKADI 06701918' && a.seances.length === 3 && f.seances.length === 4 && f.doublons === 2 && agg.entites.TOTAL.ca === 80.68 && agg.entites.NICE.ca === 37.58 && agg.entites.NICE.facture === 18.79 && agg.entites.NICE.aFacturer === 18.79 && agg.entites.EHPAD.ca === 43.1 && agg.entites.EHPAD.seances === 2 && agg.actes[0].code === 'RPE' && d.mensuel['2026-10'].doctolib_nice === 37.58 && d.mensuel['2026-10'].doctolib_ehpad === 43.1 && !js.includes('A B') && !js.includes('Patient') && !js.includes('s1'); }],
       ['pro : rétro Nice prévue 24 % cabinet + 15 % domicile sur le facturé, EHPAD autorisé = (facturé − 360) ÷ 2, cumul − versé', () => { const d = modele.dataDefaut('T'); const vide = () => ({ seances: 0, ca: 0, facture: 0, aFacturer: 0, aAssocier: 0, domicile: 0, ik: 0, bilans: 0, caCabinet: 0, caDomicile: 0, factureCabinet: 0, factureDomicile: 0 }); d.doctolib = { '2026-10': { mois: '2026-10', entites: { NICE: Object.assign(vide(), { facture: 1000, factureCabinet: 800, factureDomicile: 200, ca: 1500, caCabinet: 1200, caDomicile: 300 }), EHPAD: Object.assign(vide(), { facture: 3360, ca: 5000 }), AUTRE: vide(), TOTAL: vide() }, actes: [], jours: [] } }; const j = jeu([ligne('2026-10-05', 'VIR SEPA CENTRE DE SOINS DE RIQUIER', '-230,00', B), ligne('2026-10-06', 'VIR SEPA ORPEA', '-360,00', B), ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-1000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '1000,00', P)]); d.operations = j.d.operations; const r = modele.rulesDefaut('T'); const x = pro.mois(d, r, '2026-10'); const c = pro.cumul(d, r); return x.nice.retroPrevue === 222 && x.nice.retroPrevueCA === 333 && x.nice.retroPayee === 230 && x.ehpad.autorise === 1500 && x.ehpad.retroPayee === 360 && x.verse === 1000 && c.autorise === 1500 && c.verse === 1000 && c.reste === 500; }],
       ['sankey perso : famille dépliée → liens famille → sous-catégories', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P)]); const s = graphes.sankeyPerso(j.d, ['2026-10'], ['ALIM']); const nom = i => s.nodes[i].name; return s.links.some(l => nom(l.source) === 'ALIM' && nom(l.target) === 'ALIM.COURSES' && l.value === 100) && s.links.some(l => nom(l.source) === 'ALIM' && nom(l.target) === 'ALIM.RESTO' && l.value === 40) && graphes.sankeyPerso(j.d, ['2026-10']).links.every(l => nom(l.source) !== 'ALIM'); }],
+      ['Doctolib stock : séances anonymisées conservées, import d\'une seule structure puis de l\'autre = même résultat que les deux ensemble, recalcul après changement de légende des agendas', () => { const H = ['Statut', 'Date de séance', 'Patient', "Chiffre d'affaires", 'Actes', 'Traitement', 'Numéro de facture', 'Date de la facture', 'Type de facture', 'Au cabinet', 'HN', "Dépassements d'honoraires", 'Bilans', 'À domicile', 'Indemnités kilométriques', 'Balnéothérapie', "Propriétaire de l'agenda", "Nom de l'agenda", 'Remplaçant', 'Session ID']; const L = (st, d, pat, ca, ag, id, dom) => [st, d, pat, ca, 'RPE 8.5', 'x', '-', '-', '-', dom ? '-' : ca, '-', '-', '-', dom ? ca : '-', dom ? 4 : '-', '-', 'Maxime Belkadi', ag, '-', id]; const F = (rows) => [{ nom: "Détails du chiffre d'affaires", rows: [["DÉTAILS"], H, ...rows] }]; const a = doctolib.lire(F([L('Facturée', '01/10/2026', 'A B', 100, 'Maxime', 's1'), L('Facturée', '02/10/2026', 'C D', 100, 'Maxime', 's2', true), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')])); const b = doctolib.lire(F([L('Facturée', '04/10/2026', 'G H', 1360, 'Belkadi Maxime', 's4'), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')])); const r = modele.rulesDefaut('T'); const d1 = modele.dataDefaut('T'); doctolib.integrer(d1, [a], r); const n1 = d1.doctolib['2026-10'].entites.NICE; const e1 = d1.doctolib['2026-10'].entites.EHPAD; doctolib.integrer(d1, [b], r); const d2 = modele.dataDefaut('T'); doctolib.integrer(d2, [a, b], r); const same = JSON.stringify(Object.assign({}, d1.doctolib['2026-10'], { importe_le: 0 })) === JSON.stringify(Object.assign({}, d2.doctolib['2026-10'], { importe_le: 0 })); const js = JSON.stringify(d1); const E = d1.doctolib['2026-10'].entites; r.config.agendas = { 'Maxime': 'EHPAD', 'Belkadi Maxime': 'NICE' }; doctolib.recalculerTout(d1, r); const E2 = d1.doctolib['2026-10'].entites; return n1.factureCabinet === 100 && n1.factureDomicile === 100 && e1.facture === 0 && same && E.EHPAD.facture === 1360 && E.TOTAL.seances === 4 && E.NICE.factureDomicile === 100 && !js.includes('A B') && !js.includes('Patient') && Object.keys(d1.seances).length === 4 && E2.NICE.facture === 1360 && E2.EHPAD.factureDomicile === 100; }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
@@ -2185,6 +2210,7 @@ const store = {
       etat.charge[nom] = etat[nom].meta.ecrit_le; etat.dirty[nom] = false;
     }
     if (modele.migrer(etat.rules, etat.data)) { marquer('rules'); marquer('data'); }
+    if (Object.keys(etat.data.seances || {}).length) { const avant = JSON.stringify(etat.data.doctolib); doctolib.recalculerTout(etat.data, etat.rules); if (JSON.stringify(etat.data.doctolib) !== avant) marquer('data'); }
     recategoriser();
     toutRendre();
     if (etat.dirty.rules || etat.dirty.data) await store.enregistrer();
@@ -2402,9 +2428,9 @@ async function importerFichiers(files) {
 const docto = { exports: [], mois: null };
 function doctoAppliquer() {
   if (!docto.exports.length) return 0;
-  const f = doctolib.fusionner(docto.exports, etat.rules); let n = 0;
-  for (const m of f.mois) { doctolib.poser(etat.data, doctolib.agreger(f, m)); n++; }
-  docto.fusion = f; marquer('data'); return n;
+  const r = doctolib.integrer(etat.data, docto.exports, etat.rules);
+  for (const m of r.mois) { const a = etat.data.doctolib[m]; a.doublons = Math.max(a.doublons || 0, r.doublons); a.importe_le = util.nowIso().slice(0, 10); }
+  docto.exports = []; marquer('data'); return r.mois.length;
 }
 function rendreImport(res, n) {
   $('#import-resultat').innerHTML = res.map(r => r.type === 'doctolib' ? `<div class="card" style="margin:8px 0;background:#fafaf7"><b>${esc(r.fichier)}</b> — export Doctolib${r.structure ? ' (' + esc(r.structure) + ')' : ''} : ${r.lues} séance(s) lue(s), fusionnées avec les autres exports → onglet <b>Pro</b>. Aucun nom de patient n'est conservé.</div>` : r.type === 'positions' ? `<div class="card" style="margin:8px 0;background:#fafaf7"><b>${esc(r.fichier)}</b> — positions ${r.support} au ${r.date} : ${r.positions.length} ligne(s), valorisation <b>${fmtE(r.total)}</b> enregistrée pour ${util.mois(r.date)}${r.erreurs.length ? `<div class="small" style="color:var(--bad)">${r.erreurs.map(esc).join('<br>')}</div>` : ''}</div>` : `
@@ -2574,18 +2600,19 @@ function rendrePro() {
   const chiffre = (lbl, val, sous, cls, filtre) => `<div class="chiffre"${filtre || ''}><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div><span class="delta">${sous || ''}</span></div>`;
   const dx = (k) => ` data-explique="${k}"`;
   const ecart = (prevu, paye) => prevu === null ? '' : paye ? `<span class="delta ${Math.abs(paye - prevu) < 1 ? 'pos' : 'neg'}">prélevé ${fmtE(paye)} (${paye - prevu >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((paye - prevu) * 100) / 100))})</span>` : '<span class="delta">pas encore prélevée</span>';
-  const sansDocto = `<p class="small" style="color:var(--warn);margin:0 0 8px">Pas d'export Doctolib pour ${moisLisible(proMois)} : importe les deux fichiers (un par structure) pour le facturé, la rétro prévue et le versement autorisé.</p>`;
+  const ancien = agg && agg.source !== 'seances';
+  const sansDocto = !agg ? `<p class="small" style="color:var(--warn);margin:0 0 8px">Pas d'export Doctolib pour ${moisLisible(proMois)} : importe les deux fichiers (un par structure) pour le facturé, la rétro prévue et le versement autorisé.</p>` : ancien ? `<p class="small" style="color:var(--warn);margin:0 0 8px">Ces chiffres viennent d'un import Doctolib fait avec une version précédente (sans le détail cabinet / domicile). Réimporte les deux exports du mois : désormais les séances sont conservées (anonymisées) et tout se recalcule seul.</p>` : '';
   const N = x.nice, E = x.ehpad, cfg = x.cfg;
   z.innerHTML = `
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">🏥 Roquebrune EHPAD <span class="muted small">agenda « Belkadi Maxime »</span></h2></div>
-      ${x.doctolib ? '' : sansDocto}
+      ${sansDocto}
       <div class="chiffres" style="margin-top:8px">${chiffre('Tu peux te verser', E.autorise === null ? '—' : fmtE(E.autorise), E.autorise === null ? '' : `(facturé ${fmtE(E.facture)} − ${fmtE(cfg.ehpad_fixe)}) × ${cfg.ehpad_part} %`, 'pos', dx('ehpad-autorise'))}${chiffre('Facturé ce mois', fmtE(E.facture), E.aFacturer ? `+ ${fmtE(E.aFacturer)} encore à facturer` : '', '', dx('ehpad-facture'))}${chiffre('Rétrocession', fmtE(cfg.ehpad_fixe), ecart(cfg.ehpad_fixe, E.retroPayee), '', df('pro', 'RETRO.EHPAD', proMois))}</div>
-      ${c ? `<p class="small muted" style="margin:10px 0 0">Depuis ${moisLisible(c.depuis)} (${c.mois} mois) : autorisé ${fmtE(c.autorise)} · <a href="#"${df('pro', 'PREL', '')}>versé au perso ${fmtE(c.verse)}</a> (tous virements pro → perso) · <b style="color:${c.reste >= 0 ? 'var(--ok)' : 'var(--bad)'}">${c.reste >= 0 ? 'reste ' + fmtE(c.reste) : 'dépassé de ' + fmtE(-c.reste)}</b></p>` : ''}
+      ${c ? `<p class="small muted" style="margin:10px 0 0">Depuis ${moisLisible(c.depuis)} (${c.mois} mois) : autorisé ${fmtE(c.autorise)} · <a href="#"${df('pro', 'PREL', '')}>versé au perso ${fmtE(c.verse)}</a> (tous tes virements pro → perso, Nice compris) · <b style="color:${c.reste >= 0 ? 'var(--ok)' : 'var(--bad)'}">${c.reste >= 0 ? 'reste ' + fmtE(c.reste) : 'dépassé de ' + fmtE(-c.reste)}</b></p>` : ''}
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">🏢 Riquier Nice <span class="muted small">agenda « Maxime »</span></h2></div>
-      ${x.doctolib ? '' : sansDocto}
+      ${sansDocto}
       <div class="chiffres" style="margin-top:8px">${chiffre('Facturé ce mois', fmtE(N.facture), N.facture === null ? '' : `cabinet ${fmtE(N.factureCabinet)} · domicile ${fmtE(N.factureDomicile)}${N.aFacturer ? ` · à facturer ${fmtE(N.aFacturer)}` : ''}`, '', dx('nice-facture'))}${chiffre('Rétro prévue', N.retroPrevue === null ? '—' : fmtE(N.retroPrevue), N.retroPrevue === null ? '' : `${cfg.nice_cabinet} % cabinet + ${cfg.nice_domicile} % domicile, sur le facturé`, '', dx('nice-retro'))}${chiffre('Rétro prélevée', N.retroPayee ? fmtE(N.retroPayee) : '—', N.retroPrevue !== null && N.retroPayee ? `écart ${N.retroPayee - N.retroPrevue >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((N.retroPayee - N.retroPrevue) * 100) / 100))}` : N.retroPrevueCA !== null ? `sur tout le CA du mois ce serait ${fmtE(N.retroPrevueCA)}` : '', '', df('pro', 'RETRO.RIQUIER', proMois))}</div>
     </div>
     <div class="card">
