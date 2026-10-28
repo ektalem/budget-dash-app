@@ -381,7 +381,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.10.5';
+const APP_VERSION = '0.11.0';
 const SCHEMA = 1;
 
 const util = {
@@ -397,6 +397,11 @@ const util = {
   montantFr(n) { return (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
   jours(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 86400000); },
   mois(dateIso) { return dateIso.slice(0, 7); },
+  // Mois de rattachement d'une opération (v0.11) : le « salaire » pro → perso viré après le seuil (défaut : le 20) compte pour le mois suivant,
+  // des deux côtés de l'appariement (PREL.* sur le pro, REV.KINE / REV.REMPLA sur le perso). mois_rattache, posé à la main, prime.
+  seuilSalaire: 20,
+  moisSuivant(m) { const [y, mo] = m.split('-').map(Number); return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`; },
+  moisOp(o) { if (o.mois_rattache) return o.mois_rattache; const m = o.date_op.slice(0, 7); if (/^(PREL\.|REV\.(KINE|REMPLA)$)/.test(o.categorie || '') && Number(o.date_op.slice(8, 10)) > util.seuilSalaire) return util.moisSuivant(m); return m; },
   cents(n) { return Math.round(Math.abs(n) * 100); }
 };
 
@@ -813,7 +818,7 @@ const INDICES_BOURSO = {
 const modele = {
   meta(machine) { return { ecrit_le: util.nowIso(), machine: machine || null, app: APP_VERSION }; },
   op(base) {
-    return Object.assign({ categorie: null, entite: null, interne: false, poche: null, statut: 'a_valider', regle_id: null, apparie: null, propositions: [], note: null, annotation: { tiers: null, note: null } }, base);
+    return Object.assign({ categorie: null, entite: null, interne: false, poche: null, statut: 'a_valider', regle_id: null, apparie: null, propositions: [], note: null, mois_rattache: null, annotation: { tiers: null, note: null } }, base);
   },
   seedRules() {
     return SEEDS.map(([pattern, compte, sens, categorie, entite, opt], i) => ({
@@ -867,7 +872,7 @@ const modele = {
     if (!data.doctolib) { data.doctolib = {}; modif = true; }
     if (!data.seances) { data.seances = {}; modif = true; }
     for (const p of rules.poches) { if (!p.ajustements) { p.ajustements = []; modif = true; } if (p.actif === undefined) { p.actif = true; modif = true; } }
-    for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } if (o.solde === undefined) { o.solde = null; modif = true; } }
+    for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } if (o.solde === undefined) { o.solde = null; modif = true; } if (o.mois_rattache === undefined) { o.mois_rattache = null; modif = true; } }
     return modif;
   },
   pourEcriture(nom, obj) {
@@ -909,6 +914,7 @@ const modele = {
       const o = JSON.parse(JSON.stringify(g));
       let compl = false;
       if (!o.poche && p.poche) { o.poche = p.poche; compl = true; }
+      if (!o.mois_rattache && p.mois_rattache) { o.mois_rattache = p.mois_rattache; compl = true; }
       if (!o.note && p.note && o.statut !== 'valide') { o.note = p.note; compl = true; }
       o.annotation = o.annotation || { tiers: null, note: null };
       for (const k of ['tiers', 'note']) if (!o.annotation[k] && p.annotation && p.annotation[k]) { o.annotation[k] = p.annotation[k]; compl = true; }
@@ -1202,6 +1208,7 @@ const engine = {
   },
   // Exécution complète : recalcule toutes les lignes non validées, recompte les hits
   run(data, rules) {
+    util.seuilSalaire = Number((rules.config.pro && rules.config.pro.seuil_jour) ?? 20);
     for (const r of rules.rules) r.hits = 0;
     const paires = engine.apparier(data.operations, rules);
     const ctx = { rules, titulaire: rules.config.titulaire && norm.mots(rules.config.titulaire).length >= 2 ? rules.config.titulaire : null, paires, confiance: engine.confiance(data) };
@@ -1236,6 +1243,7 @@ const engine = {
     op.categorie = choix.categorie; op.entite = op.compte === 'pro' ? (choix.entite === '' ? null : choix.entite ?? op.entite) : null;
     op.poche = choix.poche || null; op.interne = INTERNE_CATS.test(choix.categorie); op.statut = 'valide'; op.propositions = []; op.note = null;
     if (choix.tiers !== undefined) op.annotation.tiers = choix.tiers || null;
+    if (choix.mois_rattache !== undefined) op.mois_rattache = choix.mois_rattache || null;
     if (choix.note !== undefined) op.annotation.note = choix.note || null;
     if (choix.creerRegle === false) { op.regle_id = null; return null; }
     const tiers = norm.tiers(op.libelle);
@@ -1281,8 +1289,8 @@ const SUPPORTS = { 'EPG.LA': 'Livret A', 'EPG.LEP': 'LEP', 'EPG.LDDS': 'LDDS' };
 const SUPPORTS_PATRIMOINE = ['LA', 'LEP', 'LDDS', 'PEA', 'AV', 'CRYPTO'];
 const SUPPORTS_LIBELLES = { LA: 'Livret A', LEP: 'LEP', LDDS: 'LDDS', PEA: 'PEA', AV: 'Assurance-vie', CRYPTO: 'Crypto' };
 const stats = {
-  mois(data) { return [...new Set(data.operations.map(o => util.mois(o.date_op)))].sort(); },
-  opsMois(data, m) { return data.operations.filter(o => util.mois(o.date_op) === m); },
+  mois(data) { return [...new Set(data.operations.map(o => util.moisOp(o)))].sort(); },
+  opsMois(data, m) { return data.operations.filter(o => util.moisOp(o) === m); },
   // liste de mois continue entre deux bornes AAAA-MM
   plageMois(a, b) { const r = []; let [y, m] = a.split('-').map(Number); const [yb, mb] = b.split('-').map(Number); while (y < yb || (y === yb && m <= mb)) { r.push(`${y}-${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; y++; } } return r; },
   mensuel(data, m) { return data.mensuel[m] || { doctolib_nice: null, doctolib_ehpad: null, especes: null, soldes: Object.fromEntries(SUPPORTS_PATRIMOINE.map(k => [k, null])) }; },
@@ -1300,9 +1308,9 @@ const stats = {
       const serie = [], src = []; let connu = null, connuSrc = null, cumul = 0, unCsv = false, uneSaisie = false;
       const csvK = ops.filter(o => o.compte === k && o.solde !== null && o.solde !== undefined);
       for (const m of res.mois) {
-        for (const o of ops) if (util.mois(o.date_op) === m && o.compte === 'perso' && o.categorie === codeVers[k] && o.montant < 0) cumul += -o.montant;
+        for (const o of ops) if (util.moisOp(o) === m && o.compte === 'perso' && o.categorie === codeVers[k] && o.montant < 0) cumul += -o.montant;
         const sais = (data.mensuel[m] && data.mensuel[m].soldes) ? data.mensuel[m].soldes[k] : null;
-        const derCsv = csvK.filter(o => util.mois(o.date_op) === m).pop();
+        const derCsv = csvK.filter(o => util.moisOp(o) === m).pop();
         if (sais !== null && sais !== undefined && sais !== '') { connu = Number(sais); connuSrc = 'saisie'; uneSaisie = true; }
         else if (derCsv && !(k === 'PEA' && uneSaisie)) { connu = derCsv.solde; connuSrc = 'csv'; unCsv = true; }
         else if (connu !== null) connuSrc = 'report';
@@ -1326,7 +1334,7 @@ const stats = {
   parEntite(data, op) {
     if (op.compte !== 'pro') return null;
     if (op.entite) return { [op.entite]: op.montant };
-    const part = stats.ventilation(data, util.mois(op.date_op));
+    const part = stats.ventilation(data, util.moisOp(op));
     if (part === null) return { COMMUN: op.montant };
     return { NICE: Math.round(op.montant * part * 100) / 100, EHPAD: Math.round(op.montant * (1 - part) * 100) / 100 };
   },
@@ -1337,7 +1345,7 @@ const stats = {
   },
   // Espèces du mois : une seule ligne HON.ESP datée du dernier jour du mois, remplacée à chaque saisie
   poserEspeces(data, m, montant) {
-    data.operations = data.operations.filter(o => !(o.type === 'manuel' && o.categorie === 'HON.ESP' && util.mois(o.date_op) === m));
+    data.operations = data.operations.filter(o => !(o.type === 'manuel' && o.categorie === 'HON.ESP' && util.moisOp(o) === m));
     if (montant > 0) { const d = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).toISOString().slice(0, 10); data.operations.push(stats.opManuelle('pro', d, 'HON.ESP', montant, 'espèces ' + m)); }
   },
   // Poches
@@ -1347,7 +1355,7 @@ const stats = {
   // Dépenses perso mensuelles moyennes (hors interne, hors HB), pour la cible de précaution
   depensesMoyennes(data) {
     const parMois = {};
-    for (const o of data.operations) if (o.compte === 'perso' && o.montant < 0 && !o.interne && !/^(HB|EPG|INT)\./.test(o.categorie || '')) parMois[util.mois(o.date_op)] = (parMois[util.mois(o.date_op)] || 0) + Math.abs(o.montant);
+    for (const o of data.operations) if (o.compte === 'perso' && o.montant < 0 && !o.interne && !/^(HB|EPG|INT)\./.test(o.categorie || '')) parMois[util.moisOp(o)] = (parMois[util.moisOp(o)] || 0) + Math.abs(o.montant);
     const v = Object.values(parMois); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
   },
   ciblePrecaution(data, rules) { const p = rules.poches.find(p => p.tag === 'PRECAUTION'); if (p && p.cible) return p.cible; const d = stats.depensesMoyennes(data); return d ? d * (rules.config.precaution_cible_mois || 6) : null; },
@@ -1389,12 +1397,12 @@ const bord = {
   fam(code) { return code ? code.split('.')[0] : null; },
   r2(n) { return Math.round(n * 100) / 100; },
   moisDiff(a, b) { return (Number(a.slice(0, 4)) - Number(b.slice(0, 4))) * 12 + (Number(a.slice(5, 7)) - Number(b.slice(5, 7))); },
-  moisCompte(data, compte) { return [...new Set(data.operations.filter(o => o.compte === compte).map(o => util.mois(o.date_op)))].sort(); },
+  moisCompte(data, compte) { return [...new Set(data.operations.filter(o => o.compte === compte).map(o => util.moisOp(o)))].sort(); },
   // Synthèse perso d'un mois (m = null → tous les mois cumulés).
   // revenus = Σ REV.* ; épargne = Σ EPG.* sortants ; dépenses = Σ nette par catégorie (avoirs déduits), hors HB / INT / interne ;
   // NC = lignes sans catégorie (à valider), comptées à part pour que les totaux restent complets
   // m : un mois, une liste de mois (année, 12 mois glissants) ou null (cumul)
-  dans(m) { if (!m) return () => true; if (Array.isArray(m)) { const s = new Set(m); return o => s.has(util.mois(o.date_op)); } return o => util.mois(o.date_op) === m; },
+  dans(m) { if (!m) return () => true; if (Array.isArray(m)) { const s = new Set(m); return o => s.has(util.moisOp(o)); } return o => util.moisOp(o) === m; },
   perso(data, m) {
     const dans = bord.dans(m);
     const ops = data.operations.filter(o => o.compte === 'perso' && dans(o));
@@ -1490,7 +1498,7 @@ const bord = {
     for (const o of data.operations) {
       if (o.compte !== 'perso' || o.categorie !== 'ABO' || o.montant >= 0) continue;
       const p = par[o.cle] || (par[o.cle] = { cle: o.cle, nom: o.libelle_suggere || o.cle, mois: new Set(), montant: 0, date: '' });
-      p.mois.add(util.mois(o.date_op)); if (o.date_op >= p.date) { p.date = o.date_op; p.montant = -o.montant; }
+      p.mois.add(util.moisOp(o)); if (o.date_op >= p.date) { p.date = o.date_op; p.montant = -o.montant; }
     }
     const lignes = Object.values(par).map(p => {
       const c = cfg[p.cle] || {}; const ms = [...p.mois].sort(); const premier = ms[0], dernier = ms[ms.length - 1];
@@ -1576,7 +1584,7 @@ const performance = {
     let cumul = 0; const valeur = [], verse = [];
     for (let i = 0; i < pat.mois.length; i++) {
       const m = pat.mois[i];
-      for (const o of data.operations) if (o.compte === 'perso' && o.montant < 0 && util.mois(o.date_op) === m && Object.values(codes).includes(o.categorie)) cumul += -o.montant;
+      for (const o of data.operations) if (o.compte === 'perso' && o.montant < 0 && util.moisOp(o) === m && Object.values(codes).includes(o.categorie)) cumul += -o.montant;
       verse.push(Math.round(cumul * 100) / 100);
       let v = 0, un = false; for (const k of Object.keys(codes)) { const x = pat.series[k][i]; if (x !== null && pat.sources[k][i] !== 'versements') { v += x; un = true; } }
       valeur.push(un ? Math.round(v * 100) / 100 : null);
@@ -1663,12 +1671,12 @@ const doctolib = {
 
 // ---------------------------------------------------------- Pro (v0.10) : rétrocession prévue Nice, versement autorisé EHPAD. Paramètres dans rules.config.pro
 const pro = {
-  DEFAUT: { nice_cabinet: 24, nice_domicile: 15, ehpad_fixe: 360, ehpad_part: 50 },
+  DEFAUT: { nice_cabinet: 24, nice_domicile: 15, ehpad_fixe: 360, ehpad_part: 50, seuil_jour: 20 },
   cfg(rules) { return Object.assign({}, pro.DEFAUT, (rules && rules.config && rules.config.pro) || {}); },
   r2(n) { return Math.round(n * 100) / 100; },
   // mois m : depuis les agrégats Doctolib (facturé) et les opérations du compte pro (rétro payée, versé au perso)
   mois(data, rules, m) {
-    const c = pro.cfg(rules); const agg = (data.doctolib || {})[m] || null; const ops = data.operations.filter(o => o.compte === 'pro' && util.mois(o.date_op) === m);
+    const c = pro.cfg(rules); const agg = (data.doctolib || {})[m] || null; const ops = data.operations.filter(o => o.compte === 'pro' && util.moisOp(o) === m);
     const somme = (re) => pro.r2(ops.filter(o => re.test(o.categorie || '')).reduce((s, o) => s + Math.abs(o.montant), 0));
     const N = agg ? agg.entites.NICE : null, E = agg ? agg.entites.EHPAD : null;
     const nice = { facture: N ? N.facture : null, factureCabinet: N && N.factureCabinet !== undefined ? N.factureCabinet : null, factureDomicile: N && N.factureDomicile !== undefined ? N.factureDomicile : null, aFacturer: N ? N.aFacturer : null, ca: N ? N.ca : null, seances: N ? N.seances : null,
@@ -1895,6 +1903,7 @@ const github = {
   }
 };
 
+const pro_DEFAUT_T = () => Object.assign({}, pro.DEFAUT);
 const tests = {
   // cas asynchrones (chiffrement, GitHub) : même forme, la fonction renvoie une promesse de booléen
   async casAsync() {
@@ -2057,6 +2066,7 @@ const tests = {
       ['pro : rétro Nice prévue 24 % cabinet + 15 % domicile sur le facturé, EHPAD autorisé = (facturé − 360) ÷ 2, cumul − versé', () => { const d = modele.dataDefaut('T'); const vide = () => ({ seances: 0, ca: 0, facture: 0, aFacturer: 0, aAssocier: 0, domicile: 0, ik: 0, bilans: 0, caCabinet: 0, caDomicile: 0, factureCabinet: 0, factureDomicile: 0 }); d.doctolib = { '2026-10': { mois: '2026-10', entites: { NICE: Object.assign(vide(), { facture: 1000, factureCabinet: 800, factureDomicile: 200, ca: 1500, caCabinet: 1200, caDomicile: 300 }), EHPAD: Object.assign(vide(), { facture: 3360, ca: 5000 }), AUTRE: vide(), TOTAL: vide() }, actes: [], jours: [] } }; const j = jeu([ligne('2026-10-05', 'VIR SEPA CENTRE DE SOINS DE RIQUIER', '-230,00', B), ligne('2026-10-06', 'VIR SEPA ORPEA', '-360,00', B), ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-1000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '1000,00', P)]); d.operations = j.d.operations; const r = modele.rulesDefaut('T'); const x = pro.mois(d, r, '2026-10'); const c = pro.cumul(d, r); return x.nice.retroPrevue === 222 && x.nice.retroPrevueCA === 333 && x.nice.retroPayee === 230 && x.ehpad.autorise === 1500 && x.ehpad.retroPayee === 360 && x.verse === 1000 && c.autorise === 1500 && c.verse === 1000 && c.reste === 500; }],
       ['sankey perso : famille dépliée → liens famille → sous-catégories', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P)]); const s = graphes.sankeyPerso(j.d, ['2026-10'], ['ALIM']); const nom = i => s.nodes[i].name; return s.links.some(l => nom(l.source) === 'ALIM' && nom(l.target) === 'ALIM.COURSES' && l.value === 100) && s.links.some(l => nom(l.source) === 'ALIM' && nom(l.target) === 'ALIM.RESTO' && l.value === 40) && graphes.sankeyPerso(j.d, ['2026-10']).links.every(l => nom(l.source) !== 'ALIM'); }],
       ['Doctolib stock : séances anonymisées conservées, import d\'une seule structure puis de l\'autre = même résultat que les deux ensemble, recalcul après changement de légende des agendas', () => { const H = ['Statut', 'Date de séance', 'Patient', "Chiffre d'affaires", 'Actes', 'Traitement', 'Numéro de facture', 'Date de la facture', 'Type de facture', 'Au cabinet', 'HN', "Dépassements d'honoraires", 'Bilans', 'À domicile', 'Indemnités kilométriques', 'Balnéothérapie', "Propriétaire de l'agenda", "Nom de l'agenda", 'Remplaçant', 'Session ID']; const L = (st, d, pat, ca, ag, id, dom) => [st, d, pat, ca, 'RPE 8.5', 'x', '-', '-', '-', dom ? '-' : ca, '-', '-', '-', dom ? ca : '-', dom ? 4 : '-', '-', 'Maxime Belkadi', ag, '-', id]; const F = (rows) => [{ nom: "Détails du chiffre d'affaires", rows: [["DÉTAILS"], H, ...rows] }]; const a = doctolib.lire(F([L('Facturée', '01/10/2026', 'A B', 100, 'Maxime', 's1'), L('Facturée', '02/10/2026', 'C D', 100, 'Maxime', 's2', true), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')])); const b = doctolib.lire(F([L('Facturée', '04/10/2026', 'G H', 1360, 'Belkadi Maxime', 's4'), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')])); const r = modele.rulesDefaut('T'); const d1 = modele.dataDefaut('T'); doctolib.integrer(d1, [a], r); const n1 = d1.doctolib['2026-10'].entites.NICE; const e1 = d1.doctolib['2026-10'].entites.EHPAD; doctolib.integrer(d1, [b], r); const d2 = modele.dataDefaut('T'); doctolib.integrer(d2, [a, b], r); const same = JSON.stringify(Object.assign({}, d1.doctolib['2026-10'], { importe_le: 0 })) === JSON.stringify(Object.assign({}, d2.doctolib['2026-10'], { importe_le: 0 })); const js = JSON.stringify(d1); const E = d1.doctolib['2026-10'].entites; r.config.agendas = { 'Maxime': 'EHPAD', 'Belkadi Maxime': 'NICE' }; doctolib.recalculerTout(d1, r); const E2 = d1.doctolib['2026-10'].entites; return n1.factureCabinet === 100 && n1.factureDomicile === 100 && e1.facture === 0 && same && E.EHPAD.facture === 1360 && E.TOTAL.seances === 4 && E.NICE.factureDomicile === 100 && !js.includes('A B') && !js.includes('Patient') && Object.keys(d1.seances).length === 4 && E2.NICE.facture === 1360 && E2.EHPAD.factureDomicile === 100; }],
+      ['salaire viré après le 20 → compté le mois suivant, des deux côtés (REV.KINE perso et PREL.KINE pro) ; rattachement manuel prime ; seuil réglable', () => { const j = jeu([ligne('2026-10-28', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-28', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P)]); const perso = j.d.operations.find(o => o.compte === 'perso' && o.montant > 0), pro = j.d.operations.find(o => o.compte === 'pro'); const ok1 = util.moisOp(perso) === '2026-11' && util.moisOp(pro) === '2026-11' && bord.perso(j.d, '2026-10').revenus === 0 && bord.perso(j.d, '2026-11').revenus === 2000 && stats.mois(j.d).includes('2026-11') && bord.pro(j.d, j.r, '2026-11').prel.total === 2000; perso.mois_rattache = '2026-10'; const ok2 = util.moisOp(perso) === '2026-10' && bord.perso(j.d, '2026-10').revenus === 2000; perso.mois_rattache = null; j.r.config.pro = Object.assign({}, pro_DEFAUT_T(), { seuil_jour: 30 }); engine.run(j.d, j.r); const ok3 = util.moisOp(perso) === '2026-10'; util.seuilSalaire = 20; return ok1 && ok2 && ok3; }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
@@ -2492,7 +2502,7 @@ function rendreOps() {
   const fa = $('#f-aconfirmer').checked, ft = norm.stripAccents($('#f-texte').value).toUpperCase().trim();
   const num = ft && /^-?[\d\s]+([.,]\d+)?$/.test(ft) ? Number(ft.replace(/\s/g, '').replace(',', '.')) : null;
   const okCat = (o) => okFiltreCat(o, F.cat);
-  let ops = etat.data.operations.filter(o => (!F.compte || (F.compte === 'epargne' ? csv.estEpargne(o.compte) : o.compte === F.compte)) && (!F.mois || util.mois(o.date_op) === F.mois) && okCat(o) && (!fa || o.statut === 'a_valider')
+  let ops = etat.data.operations.filter(o => (!F.compte || (F.compte === 'epargne' ? csv.estEpargne(o.compte) : o.compte === F.compte)) && (!F.mois || util.moisOp(o) === F.mois) && okCat(o) && (!fa || o.statut === 'a_valider')
     && (!ft || (num !== null ? util.cents(o.montant) === util.cents(num) : norm.stripAccents(norm.nomLisible(o) + ' ' + o.libelle + ' ' + (o.categorie || '') + ' ' + libelleCourt(o.categorie) + ' ' + (o.annotation.tiers || '')).toUpperCase().includes(ft))));
   ops.sort((a, b) => b.date_op.localeCompare(a.date_op) || a.compte.localeCompare(b.compte));
   const total = ops.reduce((s, o) => s + o.montant, 0);
@@ -2506,7 +2516,7 @@ function rendreOps() {
   for (const o of vus) {
     if (o.date_op !== jour) { jour = o.date_op; html += `<div class="grp" style="display:flex;justify-content:space-between;color:var(--muted);font-size:13px"><span>${jourLisible(jour)}</span></div>`; }
     const fam = o.categorie ? o.categorie.split('.')[0] : 'NC';
-    const sous = [o.compte === 'perso' ? '' : o.compte === 'pro' ? 'pro' : SUPPORTS_LIBELLES[o.compte] || o.compte, libelleCourt(o.categorie), o.annotation.tiers].filter(Boolean).join(' · ');
+    const sous = [o.compte === 'perso' ? '' : o.compte === 'pro' ? 'pro' : SUPPORTS_LIBELLES[o.compte] || o.compte, libelleCourt(o.categorie), o.annotation.tiers, util.moisOp(o) !== util.mois(o.date_op) ? '→ compté en ' + moisLisible(util.moisOp(o)) : ''].filter(Boolean).join(' · ');
     html += `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${esc(sous)}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span><span class="crayon" title="corriger la catégorie">✎</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`;
   }
   z.innerHTML = html || '<p class="muted small">aucune opération</p>';
@@ -2539,6 +2549,7 @@ function editeurHtml(o) {
       <label>Catégorie <select class="e-cat">${optionsCat(o, sel)}</select></label>
       ${o.compte === 'pro' ? `<label>Entité <select class="e-ent"><option value="">ventilée Nice/EHPAD</option>${ENTITES.map(e => `<option${o.entite === e ? ' selected' : ''}>${e}</option>`).join('')}</select></label>` : ''}
       <label>Tiers / note <input type="text" class="e-tiers" value="${esc(o.annotation.tiers || tiers || '')}" placeholder="nom du tiers" style="width:160px"></label>
+      <label title="Mois auquel cette ligne est comptée. Auto : le mois de l'opération, sauf un salaire pro → perso viré après le ${util.seuilSalaire} qui compte pour le mois suivant.">Compté en <select class="e-mois"><option value="">auto (${moisLisible(util.moisOp(Object.assign({}, o, { mois_rattache: null })))})</option>${[util.mois(o.date_op), util.moisSuivant(util.mois(o.date_op))].map(m => `<option value="${m}"${o.mois_rattache === m ? ' selected' : ''}>${moisLisible(m)}</option>`).join('')}</select></label>
     </div>
     <div class="row">
       <label><input type="radio" name="et-${o.id}" value="exact" checked> ce libellé seulement</label>
@@ -2557,7 +2568,7 @@ function brancherEditeur(root) {
     div.onclick = e => e.stopPropagation();
     div.querySelector('.e-ok').onclick = async () => {
       const categorie = div.querySelector('.e-cat').value; if (!categorie) { toast('Choisis une catégorie', 'bad'); return; }
-      const choix = { categorie, entite: div.querySelector('.e-ent') ? div.querySelector('.e-ent').value : undefined, poche: o.poche, tiers: div.querySelector('.e-tiers').value.trim(), etendre: div.querySelector(`input[name="et-${id}"]:checked`).value, montant: div.querySelector('.e-montant').checked, creerRegle: !div.querySelector('.e-sansregle').checked };
+      const choix = { categorie, entite: div.querySelector('.e-ent') ? div.querySelector('.e-ent').value : undefined, poche: o.poche, mois_rattache: div.querySelector('.e-mois').value, tiers: div.querySelector('.e-tiers').value.trim(), etendre: div.querySelector(`input[name="et-${id}"]:checked`).value, montant: div.querySelector('.e-montant').checked, creerRegle: !div.querySelector('.e-sansregle').checked };
       annulation.avant([o], `${norm.nomLisible(o)} → ${libelleCourt(categorie)}`);
       const r = engine.corriger(etat.data, etat.rules, machine, o, choix);
       marquer('data'); marquer('rules'); etat.editionId = null;
@@ -2629,6 +2640,7 @@ function rendrePro() {
         <label class="small muted">domicile <input type="number" step="0.1" id="pc-nd" value="${cfg.nice_domicile}" style="width:70px"> %</label>
         <label class="small muted">EHPAD : rétro fixe <input type="number" step="1" id="pc-ef" value="${cfg.ehpad_fixe}" style="width:80px"> €</label>
         <label class="small muted">part à se verser <input type="number" step="1" id="pc-ep" value="${cfg.ehpad_part}" style="width:70px"> %</label>
+        <label class="small muted" title="Un virement pro → perso après ce jour compte pour le mois suivant">salaire viré après le <input type="number" step="1" min="1" max="31" id="pc-sj" value="${cfg.seuil_jour}" style="width:60px"> = mois suivant</label>
         <button class="b primary small" id="pc-ok">Enregistrer</button>
       </div></details>`;
   brancherFiltres(z);
@@ -2644,7 +2656,7 @@ function rendrePro() {
     else if (k === 'nice-retro') html = `<p class="small" style="margin:0 0 6px">Rétrocession prévue au cabinet, calculée sur le <b>facturé</b> (la secrétaire calcule peut-être sur une autre base : à comparer avec le prélèvement réel)</p>` + T([[`cabinet ${fmtE(NE.factureCabinet)} × ${cfg.nice_cabinet} %`, fmtE(NE.factureCabinet * cfg.nice_cabinet / 100)], [`domicile ${fmtE(NE.factureDomicile)} × ${cfg.nice_domicile} %`, fmtE(NE.factureDomicile * cfg.nice_domicile / 100)], ['= rétro prévue', fmtE(N.retroPrevue)], ['sur tout le CA du mois (facturé + à facturer)', fmtE(N.retroPrevueCA)], ['prélevée sur le compte pro', N.retroPayee ? fmtE(N.retroPayee) : 'pas encore']]);
     carte.insertAdjacentHTML('beforeend', `<div class="explique" data-k="${k}">${html}</div>`);
   });
-  $('#pc-ok').onclick = async () => { etat.rules.config.pro = { nice_cabinet: Number($('#pc-nc').value), nice_domicile: Number($('#pc-nd').value), ehpad_fixe: Number($('#pc-ef').value), ehpad_part: Number($('#pc-ep').value) }; marquer('rules'); toast('Paramètres enregistrés', 'ok'); await sauver(); };
+  $('#pc-ok').onclick = async () => { etat.rules.config.pro = { nice_cabinet: Number($('#pc-nc').value), nice_domicile: Number($('#pc-nd').value), ehpad_fixe: Number($('#pc-ef').value), ehpad_part: Number($('#pc-ep').value), seuil_jour: Number($('#pc-sj').value) || 20 }; marquer('rules'); recategoriser(); toast('Paramètres enregistrés', 'ok'); await sauver(); };
   if (agg && typeof Chart === 'function') chart('c-docto-jours', { type: 'bar', data: { labels: agg.jours.map(j => j.date.slice(8)), datasets: [{ label: 'Nice', data: agg.jours.map(j => j.NICE), backgroundColor: '#2b5db3' }, { label: 'EHPAD', data: agg.jours.map(j => j.EHPAD), backgroundColor: '#1d7a4d' }] }, options: optBarres(true, false) });
 }
 $('#pr-mois').onchange = () => { proMois = $('#pr-mois').value; rendrePro(); };
@@ -2774,7 +2786,7 @@ function rendreAccueil() {
   const auj = new Date().toISOString().slice(0, 7);
   const retard = ['perso', 'pro'].filter(c => !dernier[c] || dernier[c] < auj);
   if (retard.length) items.push({ ico: '⬇️', titre: `Importer les CSV ${retard.join(' et ')}`, sous: `dernier mois importé : ${retard.map(c => `${c} ${dernier[c] || 'jamais'}`).join(', ')}`, go: 'import' });
-  if (etat.data.operations.some(o => o.compte === 'pro' && util.mois(o.date_op) === auj) && !(etat.data.doctolib || {})[auj]) items.push({ ico: '🩺', titre: 'Importer les deux exports Doctolib du mois', sous: 'Gestion des revenus › Exporter, une fois par structure', go: 'import' });
+  if (etat.data.operations.some(o => o.compte === 'pro' && util.moisOp(o) === auj) && !(etat.data.doctolib || {})[auj]) items.push({ ico: '🩺', titre: 'Importer les deux exports Doctolib du mois', sous: 'Gestion des revenus › Exporter, une fois par structure', go: 'import' });
   if (!etat.rules.config.titulaire && etat.data.operations.some(o => /^VIR INST /.test(o.cle))) { const dev = engine.devinerTitulaire(etat.data); items.push({ ico: '🔄', titre: dev ? `Tes virements à toi-même : « ${dev} », c'est toi ?` : 'Ton nom, pour reconnaître tes virements à toi-même', sous: dev ? 'un clic et ils se classent seuls, pour toujours' : 'Réglages › Paramètres', go: dev ? 'titulaire:' + dev : 'avance' }); }
   const ab = bord.abonnements(etat.data, etat.rules); if (ab.alertes.length) items.push({ ico: '🔁', titre: `${ab.alertes.length} abonnement${ab.alertes.length > 1 ? 's' : ''} à regarder`, sous: ab.alertes.slice(0, 3).map(a => `${a.nom} : ${a.statut}`).join(' · '), go: 'abos' });
   $('#ac-todo').innerHTML = items.length ? items.map(t => `<li data-go="${t.go}"><span class="ico">${t.ico}</span><span class="txt">${esc(t.titre)}<small>${esc(t.sous)}</small></span><span class="chev">›</span></li>`).join('') : '<li><span class="ico">✅</span><span class="txt">Tout est à jour<small>rien à confirmer, rien à importer</small></span></li>';
