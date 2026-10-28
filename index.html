@@ -273,7 +273,7 @@ input,select,textarea{max-width:100%}
       <label class="small"><input type="checkbox" id="f-aconfirmer"> à confirmer seulement</label>
       <span class="muted small" id="ops-count" style="margin-left:auto"></span>
     </div>
-    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse ici les CSV Bourso, l'export Bitstack et l'Excel Linxea</div>
+    <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse ici les CSV Bourso, l'export Bitstack, l'Excel Linxea et les deux exports Doctolib</div>
     <div id="import-resultat"></div>
     <div class="kv small" style="margin-top:6px" id="etat-fichiers"></div>
   </div>
@@ -306,10 +306,15 @@ input,select,textarea{max-width:100%}
         <div><div id="t-pea-pays"></div><p class="small muted" id="k-pea-src" style="margin:6px 0 0"></p></div>
       </div>
     </div>
+    <div class="card large" id="k-docto-card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0" title="Exports « Détails du chiffre d'affaires » de Doctolib, un par structure de facturation. Les séances non facturées apparaissent dans les deux exports : elles sont comptées une seule fois. Structure = agenda.">Activité Doctolib <span class="muted small">(CA réel, dédoublonné)</span></h2><label class="small muted">Mois <select id="d-mois"></select></label></div>
+      <div id="d-contenu" style="margin-top:8px"></div>
+    </div>
     <div class="card large">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">Pro</h2><label class="small muted">Mois <select id="m-mois"></select></label></div>
       <div class="chiffres" id="k-pro" style="margin-top:8px"></div>
-      <div class="row" style="margin-top:10px" title="Les totaux Doctolib ventilent les honoraires Nice / EHPAD ; les espèces créent une ligne du mois">
+      <p class="small muted" id="m-docto-auto" style="margin:8px 0 0"></p>
+      <div class="row" style="margin-top:6px" title="Les totaux Doctolib ventilent les honoraires Nice / EHPAD ; les espèces créent une ligne du mois">
         <label class="small muted">Facturé Nice <input type="number" step="0.01" id="m-nice" style="width:110px"></label>
         <label class="small muted">Facturé EHPAD <input type="number" step="0.01" id="m-ehpad" style="width:110px"></label>
         <label class="small muted">Espèces encaissées <input type="number" step="0.01" id="m-especes" style="width:110px"></label>
@@ -469,7 +474,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.4';
+const APP_VERSION = '0.9.5';
 const SCHEMA = 1;
 
 const util = {
@@ -952,6 +957,7 @@ const modele = {
     catalogue.appliquer(rules);
     if (!data.soldes) { data.soldes = {}; modif = true; }
     if (!data.positions) { data.positions = {}; modif = true; }
+    if (!data.doctolib) { data.doctolib = {}; modif = true; }
     for (const p of rules.poches) { if (!p.ajustements) { p.ajustements = []; modif = true; } if (p.actif === undefined) { p.actif = true; modif = true; } }
     for (const o of data.operations) { if (o.apparie === undefined) { o.apparie = null; modif = true; } if (!o.propositions) { o.propositions = []; modif = true; } if (o.note === undefined) { o.note = null; modif = true; } if (o.solde === undefined) { o.solde = null; modif = true; } }
     return modif;
@@ -1012,6 +1018,8 @@ const modele = {
       res.mensuel[m] = r;
     }
     modele.majSoldes(res, ici.soldes); modele.majSoldes(res, autre.soldes);
+    res.doctolib = JSON.parse(JSON.stringify(ici.doctolib || {}));
+    for (const [m, v] of Object.entries(autre.doctolib || {})) if (!res.doctolib[m] || (v.importe_le || '') > (res.doctolib[m].importe_le || '')) res.doctolib[m] = JSON.parse(JSON.stringify(v));
     res.positions = JSON.parse(JSON.stringify(ici.positions || {}));
     for (const [sup, par] of Object.entries(autre.positions || {})) { res.positions[sup] = res.positions[sup] || {}; for (const [d, v] of Object.entries(par)) if (!res.positions[sup][d]) res.positions[sup][d] = JSON.parse(JSON.stringify(v)); }
     return { data: res, bilan };
@@ -1667,6 +1675,61 @@ const performance = {
   }
 };
 
+// ---------------------------------------------------------- Doctolib (v0.9.5) : exports « Détails du chiffre d'affaires », un par structure de facturation
+// Doctolib compte les séances non encore facturées dans les deux structures : on fusionne sur « Session ID » et on attribue chaque séance à sa structure par
+// l'agenda (rules.config.agendas : nom d'agenda → NICE | EHPAD). Seuls des agrégats sont conservés (data.doctolib[mois]) : jamais de nom de patient.
+const doctolib = {
+  AGENDAS_DEFAUT: { 'Maxime': 'NICE', 'Belkadi Maxime': 'EHPAD' },
+  agendas(rules) { return Object.assign({}, doctolib.AGENDAS_DEFAUT, (rules && rules.config && rules.config.agendas) || {}); },
+  num(v) { if (typeof v === 'number') return v; const t = String(v ?? '').trim().replace(/\s/g, '').replace(',', '.'); const n = Number(t); return t && t !== '-' && Number.isFinite(n) ? n : 0; },
+  dateIso(v) { if (v instanceof Date) return v.toISOString().slice(0, 10); const m = /^(\d\d)\/(\d\d)\/(\d{4})/.exec(String(v ?? '').trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; },
+  // feuille « Détails du chiffre d'affaires » → lignes { id, date, statut, ca, actes, agenda, facture, typeFacture, domicile, ik, bilan } (patient jamais repris)
+  estExport(feuilles) { return !!feuilles.find(f => /d[ée]tails du chiffre/i.test(f.nom)); },
+  lire(feuilles) {
+    const f = feuilles.find(f => /d[ée]tails du chiffre/i.test(f.nom)); if (!f) return null;
+    const rows = f.rows; const hi = rows.findIndex(r => String(r[0] ?? '').trim() === 'Statut'); if (hi < 0) return null;
+    const h = rows[hi].map(x => norm.stripAccents(String(x ?? '')).trim().toLowerCase()); const col = (re) => h.findIndex(x => re.test(x));
+    const c = { statut: col(/^statut/), date: col(/date de seance/), ca: col(/^chiffre d.affaires/), actes: col(/^actes/), agenda: col(/nom de l.agenda/), facture: col(/numero de facture/), dateFact: col(/date de la facture/), type: col(/type de facture/), dom: col(/^a domicile/), ik: col(/indemnites/), bilan: col(/^bilans/), id: col(/session id/), trait: col(/^traitement/) };
+    const seances = [];
+    for (const r of rows.slice(hi + 1)) {
+      const statut = String(r[c.statut] ?? '').trim(); if (!statut) continue;
+      const id = String(r[c.id] ?? '').trim(); const date = doctolib.dateIso(r[c.date]); if (!id || !date) continue;
+      seances.push({ id, date, statut, ca: doctolib.num(r[c.ca]), actes: String(r[c.actes] ?? '').trim(), agenda: String(r[c.agenda] ?? '').trim(), facture: String(r[c.facture] ?? '').trim(), dateFact: doctolib.dateIso(r[c.dateFact]), typeFacture: String(r[c.type] ?? '').trim(), domicile: doctolib.num(r[c.dom]) > 0, ik: doctolib.num(r[c.ik]), bilan: doctolib.num(r[c.bilan]) > 0 });
+    }
+    const struct = (feuilles.find(f => /synth/i.test(f.nom)) || { rows: [] }).rows.find(r => /structure de facturation/i.test(String(r[0] ?? ''))); 
+    return { seances, structure: struct ? String(struct[1] ?? '').trim() : null };
+  },
+  // fusion de plusieurs exports : union par Session ID ; la ligne « Facturée » gagne sur « À facturer » ; entité par agenda
+  fusionner(exports, rules) {
+    const ag = doctolib.agendas(rules); const par = new Map(); const vus = {};
+    for (const e of exports) for (const s of e.seances) { vus[s.id] = (vus[s.id] || 0) + 1; const d = par.get(s.id); if (!d || (s.statut === 'Facturée' && d.statut !== 'Facturée')) par.set(s.id, Object.assign({}, s, { entite: ag[s.agenda] || null })); }
+    const seances = [...par.values()].sort((a, b) => a.date.localeCompare(b.date));
+    const doublons = seances.filter(s => vus[s.id] > 1).length;
+    const mois = [...new Set(seances.map(s => s.date.slice(0, 7)))].sort();
+    return { seances, doublons, mois, agendasInconnus: [...new Set(seances.filter(s => !s.entite).map(s => s.agenda))] };
+  },
+  // agrégats d'un mois : par entité (NICE, EHPAD, autre) : séances, CA, facturé, à facturer, à associer, domicile, IK ; par acte ; par semaine
+  agreger(fusion, m) {
+    const S = fusion.seances.filter(s => s.date.slice(0, 7) === m);
+    const vide = () => ({ seances: 0, ca: 0, facture: 0, aFacturer: 0, aAssocier: 0, domicile: 0, ik: 0, bilans: 0 });
+    const ent = { NICE: vide(), EHPAD: vide(), AUTRE: vide(), TOTAL: vide() }; const actes = {}; const jours = {};
+    for (const s of S) {
+      for (const k of [s.entite || 'AUTRE', 'TOTAL']) { const e = ent[k]; e.seances++; e.ca += s.ca; if (s.statut === 'Facturée') e.facture += s.ca; else if (/associer/i.test(s.statut)) e.aAssocier++; else e.aFacturer += s.ca; if (s.domicile) e.domicile++; e.ik += s.ik; if (s.bilan) e.bilans++; }
+      const a = s.actes.split('+')[0].trim().split(' ')[0] || '?'; actes[a] = actes[a] || { code: a, n: 0, ca: 0 }; actes[a].n++; actes[a].ca += s.ca;
+      jours[s.date] = jours[s.date] || { date: s.date, n: 0, ca: 0, NICE: 0, EHPAD: 0 }; jours[s.date].n++; jours[s.date].ca += s.ca; if (s.entite) jours[s.date][s.entite] += s.ca;
+    }
+    for (const e of Object.values(ent)) for (const k of ['ca', 'facture', 'aFacturer', 'ik']) e[k] = Math.round(e[k] * 100) / 100;
+    return { mois: m, entites: ent, actes: Object.values(actes).map(a => Object.assign(a, { ca: Math.round(a.ca * 100) / 100 })).sort((a, b) => b.ca - a.ca), jours: Object.values(jours).sort((a, b) => a.date.localeCompare(b.date)).map(j => Object.assign(j, { ca: Math.round(j.ca * 100) / 100 })), doublons: fusion.doublons, agendasInconnus: fusion.agendasInconnus, importe_le: util.nowIso().slice(0, 10) };
+  },
+  // enregistre les agrégats dans data.doctolib[mois] et pose les totaux de ventilation (§3.9) : doctolib_nice / doctolib_ehpad = CA par entité
+  poser(data, agg) {
+    if (!data.doctolib) data.doctolib = {};
+    data.doctolib[agg.mois] = agg;
+    const m = data.mensuel[agg.mois] || (data.mensuel[agg.mois] = { doctolib_nice: null, doctolib_ehpad: null, especes: null, soldes: {} });
+    m.doctolib_nice = agg.entites.NICE.ca; m.doctolib_ehpad = agg.entites.EHPAD.ca; m.doctolib_auto = true;
+  }
+};
+
 // ---------------------------------------------------------- graphiques (Méthodo v3 §9.2) : données prêtes à tracer, sans DOM
 // Une période = { mode: 'mois' | 'annee' | 'glissant', valeur } → liste de mois ; les totaux reprennent bord.perso / bord.pro
 const graphes = {
@@ -2034,6 +2097,7 @@ const tests = {
       ['csv : séparateur détecté (virgule pour Bitstack, point-virgule pour Bourso)', () => eq(csv.parse('a,b,"c,d"\n1,2,3'), [['a', 'b', 'c,d'], ['1', '2', '3']]) && eq(csv.parse('a;b\n1;2'), [['a', 'b'], ['1', '2']])],
       ['Bitstack : transactions → quantité détenue, investi (euros + frais, dépôts crypto au cours du jour), dernier cours, valorisation ; sans adresse ni hash', () => { const txt = 'Type,Date,Fuseau horaire,Montant reçu,Monnaie ou jeton reçu,Montant envoyé,Monnaie ou jeton envoyé,Frais,Monnaie ou jeton des frais,Description,Prix du jeton du montant envoyé,Prix du jeton du montant recu,Prix du jeton des frais,Adresse,Transaction hash,ID Externe\nÉchange,2026-10-18T14:33:05Z,GMT,0.0002,BTC,10,EUR,0.2,EUR,Achat par carte,,50000,,,,id1\nÉchange,2026-10-11T14:33:04Z,GMT,0.0001,BTC,4,EUR,0.1,EUR,Achat par carte,,40000,,,,id2\nDépôt,2026-06-28T15:45:32Z,GMT,0.001,BTC,,,,,Dépôt (Crypto),,30000,,bc1qxxx,hashxxx,id3\n'; const rows = csv.parse(txt); const ok0 = csv.estPositions(rows) && csv.estBitstack(rows); const p = csv.toPositions(rows, 'transactions-x.csv'); const b = p.positions[0]; const d = modele.dataDefaut('T'); modele.poserPositions(d, p); const perf = performance.support(d, modele.rulesDefaut('T'), 'CRYPTO'); return ok0 && p.support === 'CRYPTO' && p.date === '2026-10-18' && b.isin === 'BTC' && Math.abs(b.quantite - 0.0013) < 1e-9 && b.investi === 44.3 && b.cours === 50000 && b.montant === 65 && p.total === 65 && !JSON.stringify(p).includes('bc1q') && !JSON.stringify(p).includes('hashxxx') && !JSON.stringify(p).includes('id1') && d.mensuel['2026-10'].soldes.CRYPTO === 65 && perf.investi === 44.3 && perf.valeur === 65 && perf.gain === 20.7 && perf.source === 'fichier'; }],
       ['performance : PEA depuis PRU × parts, AV depuis le fichier, total et courbe valeur / versé', () => { const d = modele.dataDefaut('T'); modele.poserPositions(d, { support: 'PEA', date: '2026-10-26', total: 1300, positions: [{ isin: 'IE0002XZSHO1', nom: 'W', montant: 1300, quantite: 10, pru: 100 }] }); const j = jeu([ligne('2026-09-09', 'VIR Virement vers PEA', '-500,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); d.operations = j.d.operations; const r = modele.rulesDefaut('T'); const pea = performance.support(d, r, 'PEA'); const t = performance.tous(d, r); const c = performance.courbe(d); return pea.investi === 1000 && pea.source === 'pru' && pea.gain === 300 && pea.pct === 30 && t.supports.length === 1 && t.gain === 300 && c.mois.join() === '2026-09,2026-10' && c.verse.join() === '500,1000' && c.valeur[1] === 1300; }],
+      ['Doctolib : deux exports fusionnés sur Session ID, séances non facturées comptées une fois, CA par structure via l\'agenda, totaux de ventilation posés, aucun nom conservé', () => { const H = ['Statut', 'Date de séance', 'Patient', "Chiffre d'affaires", 'Actes', 'Traitement', 'Numéro de facture', 'Date de la facture', 'Type de facture', 'Au cabinet', 'HN', "Dépassements d'honoraires", 'Bilans', 'À domicile', 'Indemnités kilométriques', 'Balnéothérapie', "Propriétaire de l'agenda", "Nom de l'agenda", 'Remplaçant', 'Session ID']; const L = (st, d, pat, ca, ag, id) => [st, d, pat, ca, 'RPE 8.5', 'x', st === 'Facturée' ? '245' : '-', st === 'Facturée' ? d : '-', st === 'Facturée' ? 'FSE' : '-', ca, '-', '-', '-', '-', '-', '-', 'Maxime Belkadi', ag, '-', id]; const feuillesA = [{ nom: 'Synthèse', rows: [['SYNTHÈSE'], ['Structure de facturation', 'MAXIME BELKADI 06701918']] }, { nom: "Détails du chiffre d'affaires", rows: [["DÉTAILS"], ['Période', '01/10/2026 - 28/10/2026'], H, L('Facturée', '01/10/2026', 'A B', 18.79, 'Maxime', 's1'), L('À facturer', '02/10/2026', 'C D', 18.79, 'Maxime', 's2'), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')] }]; const feuillesB = [{ nom: "Détails du chiffre d'affaires", rows: [["DÉTAILS"], H, L('Facturée', '04/10/2026', 'G H', 18.79, 'Belkadi Maxime', 's4'), L('À facturer', '02/10/2026', 'C D', 18.79, 'Maxime', 's2'), L('À facturer', '03/10/2026', 'E F', 24.31, 'Belkadi Maxime', 's3')] }]; const a = doctolib.lire(feuillesA), b = doctolib.lire(feuillesB); const f = doctolib.fusionner([a, b], modele.rulesDefaut('T')); const agg = doctolib.agreger(f, '2026-10'); const d = modele.dataDefaut('T'); doctolib.poser(d, agg); const js = JSON.stringify(d); return doctolib.estExport(feuillesA) && a.structure === 'MAXIME BELKADI 06701918' && a.seances.length === 3 && f.seances.length === 4 && f.doublons === 2 && agg.entites.TOTAL.ca === 80.68 && agg.entites.NICE.ca === 37.58 && agg.entites.NICE.facture === 18.79 && agg.entites.NICE.aFacturer === 18.79 && agg.entites.EHPAD.ca === 43.1 && agg.entites.EHPAD.seances === 2 && agg.actes[0].code === 'RPE' && d.mensuel['2026-10'].doctolib_nice === 37.58 && d.mensuel['2026-10'].doctolib_ehpad === 43.1 && !js.includes('A B') && !js.includes('Patient') && !js.includes('s1'); }],
       ['graphes : périodes (mois, année, 12 mois glissants) → listes de mois', () => { const j = jeu([ligne('2025-11-05', 'CARTE 04/11/25 MONOPRIX CB*1', '-10,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-10,00', P)]); const a = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }), g = graphes.moisPeriode(j.d, { mode: 'glissant' }), m = graphes.moisPeriode(j.d, { mode: 'mois', valeur: '2026-03' }); return graphes.annees(j.d).join() === '2025,2026' && a.length === 10 && a[0] === '2026-01' && a[9] === '2026-10' && g.length === 12 && g[0] === '2025-11' && g[11] === '2026-10' && m.join() === '2026-03'; }],
       ['graphes perso : évolution mensuelle, catégories (familles → sous-catégories), lignes derrière une part', () => { const j = jeu([ligne('2026-09-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-09-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-09-05', 'CARTE 04/09/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-120,00', P), ligne('2026-10-06', 'CARTE 05/10/26 PANERA CB*1', '-40,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-500,00', P)]); const mois = graphes.moisPeriode(j.d, { mode: 'annee', valeur: '2026' }); const ev = graphes.persoMensuel(j.d, mois); const c = graphes.persoCategories(j.d, mois); const l = graphes.lignes(j.d, 'perso', mois, 'ALIM'), l2 = graphes.lignes(j.d, 'perso', mois, 'ALIM.RESTO'); return ev.length === 2 && ev[0].mois === '2026-09' && ev[0].revenus === 2000 && ev[1].depenses === 160 && ev[1].epargne === 500 && c.familles[0].code === 'ALIM' && c.familles[0].montant === 260 && c.familles[0].sous[0].code === 'ALIM.COURSES' && c.familles[0].sous[0].montant === 220 && c.total === 260 && l.length === 3 && l2.length === 1; }],
       ['graphes perso : sankey revenus → familles, épargne → supports, reste ; somme entrante = somme sortante', () => { const j = jeu([ligne('2026-10-13', 'VIR INST JEAN DUPONT', '-2000,00', B), ligne('2026-10-13', 'VIR SEPA JEAN DUPONT', '2000,00', P), ligne('2026-10-05', 'CARTE 04/10/26 MONOPRIX CB*1', '-100,00', P), ligne('2026-10-09', 'VIR Virement vers LIVRET A', '-300,00', P), ligne('2026-10-09', 'VIR Virement vers PEA', '-200,00', P), ligne('2026-10-18', 'CARTE 17/10/26 BOUTIQUE INCONNUE CB*1', '-24,99', P, 'Vêtements')]); const s = graphes.sankeyPerso(j.d, ['2026-10']); const nom = i => s.nodes[i].name; const vers = (n) => s.links.filter(l => nom(l.target) === n).reduce((a, l) => a + l.value, 0); const hub = s.nodes.findIndex(n => n.name === 'Revenus'); const entrant = s.links.filter(l => l.target === hub).reduce((a, l) => a + l.value, 0), sortant = s.links.filter(l => l.source === hub).reduce((a, l) => a + l.value, 0); return s.totalRev === 2000 && vers('ALIM') === 100 && vers('Épargne') === 500 && vers('EPG.LA') === 300 && vers('NC') === 24.99 && s.reste === 1375.01 && Math.abs(entrant - sortant) < 0.005; }],
@@ -2048,7 +2112,7 @@ const tests = {
   run() { return tests.cas().map(([nom, fn]) => { let ok = false, err = null; try { ok = !!fn(); } catch (e) { err = e.message; } return { nom, ok, err }; }); }
 };
 
-if (typeof module !== 'undefined') module.exports = { util, norm, csv, serial, modele, engine, stats, bord, graphes, catalogue, diversification, performance, ETF_REF, chiffre, coffre, github, tests, CATALOGUE, CAT, FAMILLES, SEEDS };
+if (typeof module !== 'undefined') module.exports = { util, norm, csv, serial, modele, engine, stats, bord, graphes, catalogue, diversification, performance, doctolib, ETF_REF, chiffre, coffre, github, tests, CATALOGUE, CAT, FAMILLES, SEEDS };
 // ============================================================ UI (DOM)
 if (typeof document !== 'undefined') (function () {
 const $ = s => document.querySelector(s);
@@ -2377,9 +2441,12 @@ async function importerFichiers(files) {
     let rows;
     if (/\.xlsx?$/i.test(f.name)) {
       if (typeof XLSX === 'undefined') { resultats.push({ fichier: f.name, erreurs: ['lecture Excel indisponible (bibliothèque non chargée, hors ligne ?)'], lues: 0, ops: [], comptes: {} }); continue; }
-      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true }); const ws = wb.Sheets[wb.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' }).filter(r => r.some(v => v !== '' && v !== null && v !== undefined));
-      if (!csv.estPositions(rows)) { resultats.push({ fichier: f.name, erreurs: ['Excel non reconnu : attendu un export Linxea (colonnes ISIN, Somme en Compte)'], lues: 0, ops: [], comptes: {} }); continue; }
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
+      const feuilles = wb.SheetNames.map(n => ({ nom: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }) }));
+      if (doctolib.estExport(feuilles)) { const e = doctolib.lire(feuilles); if (e) { docto.exports.push(Object.assign(e, { fichier: f.name })); resultats.push({ fichier: f.name, type: 'doctolib', structure: e.structure, lues: e.seances.length, erreurs: [], ops: [], comptes: {} }); continue; } }
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = feuilles[0].rows.filter(r => r.some(v => v !== '' && v !== null && v !== undefined));
+      if (!csv.estPositions(rows)) { resultats.push({ fichier: f.name, erreurs: ['Excel non reconnu : attendu un export Linxea (ISIN, Somme en Compte) ou Doctolib (Détails du chiffre d\'affaires)'], lues: 0, ops: [], comptes: {} }); continue; }
     } else if (!/\.csv$/i.test(f.name)) { resultats.push({ fichier: f.name, erreurs: ['pas un .csv ni un .xlsx'], lues: 0, ops: [], comptes: {} }); continue; }
     else rows = csv.parse(await f.text());
     if (csv.estPositions(rows)) { const pz = csv.toPositions(rows, f.name); modele.poserPositions(etat.data, pz); marquer('data'); resultats.push(Object.assign(pz, { comptes: {}, ops: [], inserees: 0, doublons: 0 })); continue; }
@@ -2391,12 +2458,22 @@ async function importerFichiers(files) {
     if (modele.majSoldes(etat.data, r.soldes)) marquer('data');
     resultats.push(r);
   }
+  if (resultats.some(r => r.type === 'doctolib')) { const n = doctoAppliquer(); if (n) toast(`Doctolib : ${n} mois recalculé(s), totaux Nice / EHPAD posés`, 'ok'); }
   const n = recategoriser();
   rendreImport(resultats, n);
   await sauver();
+  if (resultats.some(r => r.type === 'doctolib')) { montrerEcran('mensuel'); setTimeout(() => $('#k-docto-card').scrollIntoView({ behavior: 'smooth' }), 100); }
+}
+// exports Doctolib de la session (jamais enregistrés : seuls les agrégats mensuels le sont) ; plusieurs fichiers = plusieurs structures, fusionnés
+const docto = { exports: [], mois: null };
+function doctoAppliquer() {
+  if (!docto.exports.length) return 0;
+  const f = doctolib.fusionner(docto.exports, etat.rules); let n = 0;
+  for (const m of f.mois) { doctolib.poser(etat.data, doctolib.agreger(f, m)); n++; }
+  docto.fusion = f; marquer('data'); return n;
 }
 function rendreImport(res, n) {
-  $('#import-resultat').innerHTML = res.map(r => r.type === 'positions' ? `<div class="card" style="margin:8px 0;background:#fafaf7"><b>${esc(r.fichier)}</b> — positions ${r.support} au ${r.date} : ${r.positions.length} ligne(s), valorisation <b>${fmtE(r.total)}</b> enregistrée pour ${util.mois(r.date)}${r.erreurs.length ? `<div class="small" style="color:var(--bad)">${r.erreurs.map(esc).join('<br>')}</div>` : ''}</div>` : `
+  $('#import-resultat').innerHTML = res.map(r => r.type === 'doctolib' ? `<div class="card" style="margin:8px 0;background:#fafaf7"><b>${esc(r.fichier)}</b> — export Doctolib${r.structure ? ' (' + esc(r.structure) + ')' : ''} : ${r.lues} séance(s) lue(s), fusionnées avec les autres exports → <b>Comptes › Activité Doctolib</b>. Aucun nom de patient n'est conservé.</div>` : r.type === 'positions' ? `<div class="card" style="margin:8px 0;background:#fafaf7"><b>${esc(r.fichier)}</b> — positions ${r.support} au ${r.date} : ${r.positions.length} ligne(s), valorisation <b>${fmtE(r.total)}</b> enregistrée pour ${util.mois(r.date)}${r.erreurs.length ? `<div class="small" style="color:var(--bad)">${r.erreurs.map(esc).join('<br>')}</div>` : ''}</div>` : `
     <div class="card" style="margin:8px 0;background:#fafaf7">
       <b>${esc(r.fichier)}</b> — ${r.lues} ligne(s) lue(s)${Object.keys(r.comptes).length ? ' (' + Object.entries(r.comptes).map(([c, k]) => `${c} : ${k}`).join(', ') + ')' : ''}
       → <span class="${r.inserees ? 'test-ok' : 'muted'}">${r.inserees ?? 0} insérée(s)</span>, ${r.doublons ?? 0} doublon(s) ignoré(s)
@@ -2533,6 +2610,7 @@ function rendreMensuel() {
   // pro du mois
   const s = stats.mensuel(etat.data, moisCourant || '');
   $('#m-nice').value = s.doctolib_nice ?? ''; $('#m-ehpad').value = s.doctolib_ehpad ?? ''; $('#m-especes').value = s.especes ?? '';
+  $('#m-docto-auto').textContent = s.doctolib_auto ? 'Totaux Nice / EHPAD remplis depuis les exports Doctolib (Activité Doctolib ci-dessus).' : '';
   const ss = s.soldes || {};
   $('#m-la').value = ss.LA ?? ''; $('#m-lep').value = ss.LEP ?? ''; $('#m-ldds').value = ss.LDDS ?? ''; $('#m-pea').value = ss.PEA ?? ''; $('#m-av').value = ss.AV ?? ''; $('#m-crypto').value = ss.CRYPTO ?? '';
   if (moisCourant) { const p = stats.patrimoine(etat.data), i = p.mois.indexOf(moisCourant); const lus = i >= 0 ? SUPPORTS_PATRIMOINE.filter(k => p.sources[k][i] === 'csv').map(k => `${SUPPORTS_LIBELLES[k]} ${fmtE(p.series[k][i])}`) : []; $('#m-soldes-csv').textContent = lus.length ? 'Lus dans les CSV ce mois-ci : ' + lus.join(' · ') : ''; }
@@ -2572,7 +2650,25 @@ $('#m-ok').onclick = async () => {
   stats.poserEspeces(etat.data, moisCourant, m.especes || 0);
   marquer('data'); recategoriser(); toast(`${moisLisible(moisCourant)} enregistré`, 'ok'); await sauver();
 };
-function rendrePea() { rendreCrypto(); rendrePerformance(); rendrePositions('PEA', 'pea', 'Importe le fichier « positions instantanées » du PEA (Opérations › Importer) pour voir la répartition par ETF et par pays.'); rendrePositions('AV', 'av', 'Importe l\'export Excel « données financières » de Linxea (Opérations › Importer) pour voir la répartition par support et par pays.'); rendreGlobale(); }
+function rendreDocto() {
+  const z = $('#d-contenu'); const tous = Object.keys(etat.data.doctolib || {}).sort();
+  const sel = $('#d-mois');
+  if (!tous.length) { sel.innerHTML = '<option>—</option>'; z.innerHTML = `<p class="muted small">Glisse dans Opérations › Importer les deux exports Excel de Doctolib (Gestion des revenus › Chiffre d'affaires › Exporter, une fois par structure de facturation). Le dashboard fusionne les séances, compte une seule fois celles encore à facturer, et attribue chaque séance à sa structure d'après l'agenda : « Maxime » → Riquier Nice, « Belkadi Maxime » → Roquebrune EHPAD.</p>`; return; }
+  if (!docto.mois || !tous.includes(docto.mois)) docto.mois = tous[tous.length - 1];
+  sel.innerHTML = tous.slice().reverse().map(m => `<option value="${m}"${m === docto.mois ? ' selected' : ''}>${moisLisible(m)}</option>`).join('');
+  const a = etat.data.doctolib[docto.mois]; const E = a.entites;
+  const chiffre = (lbl, val, sous, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div><span class="delta">${sous}</span></div>`;
+  const ligne = (nom, e, coul) => `<div class="fam-row" style="cursor:default"><span class="ico" style="background:${coul}">🩺</span><span class="nom">${nom}<small class="muted" style="display:block">${e.seances} séance(s) · facturé ${fmtE(e.facture)} · à facturer ${fmtE(e.aFacturer)}${e.aAssocier ? ` · ${e.aAssocier} à associer` : ''}${e.domicile ? ` · ${e.domicile} à domicile (IK ${fmtE(e.ik)})` : ''}${e.bilans ? ` · ${e.bilans} bilan(s)` : ''}</small></span><span class="pc">${E.TOTAL.ca ? Math.round(e.ca / E.TOTAL.ca * 100) : 0} %</span><span class="mt"><b>${fmtE(e.ca)}</b></span></div>`;
+  const dd = a.doublons;
+  z.innerHTML = `<div class="chiffres">${chiffre('CA réel du mois', fmtE(E.TOTAL.ca), `${E.TOTAL.seances} séances uniques`)}${chiffre('Facturé', fmtE(E.TOTAL.facture), 'FSE transmises')}${chiffre('À facturer', fmtE(E.TOTAL.aFacturer), `${dd ? dd + ' séance(s) présentes dans les deux exports, comptées une fois' : 'rien en double'}`, 'warn')}</div>
+    <div style="margin-top:10px">${ligne('Riquier Nice <span class="small muted">agenda « Maxime »</span>', E.NICE, '#2b5db3')}${ligne('Roquebrune EHPAD <span class="small muted">agenda « Belkadi Maxime »</span>', E.EHPAD, '#1d7a4d')}${E.AUTRE.seances ? ligne('Agenda non reconnu <span class="small muted">' + esc((a.agendasInconnus || []).join(', ')) + '</span>', E.AUTRE, '#9a9890') : ''}</div>
+    ${dd ? `<p class="small" style="margin:8px 0 0;color:var(--warn)">⚠ Doctolib affiche ${fmtE(Math.round((E.TOTAL.ca + E.TOTAL.aFacturer) * 100) / 100)} en additionnant ses deux écrans : les ${fmtE(E.TOTAL.aFacturer)} à facturer y sont comptés deux fois. Le CA réel est ${fmtE(E.TOTAL.ca)}.</p>` : ''}
+    <div class="gr-grid" style="margin-top:12px"><div><p class="small muted" style="margin:0 0 4px">Par jour</p><div class="chart" id="c-docto-jours" style="height:200px"></div></div><div><p class="small muted" style="margin:0 0 4px">Par type d'acte</p>${a.actes.slice(0, 8).map(x => `<div class="fam-row" style="cursor:default"><span class="nom"><span class="cat">${esc(x.code)}</span></span><span class="bar" style="flex-basis:120px"><i style="width:${Math.round(x.ca / a.actes[0].ca * 100)}%;background:var(--acc)"></i></span><span class="pc">${x.n}</span><span class="mt">${fmtE(x.ca)}</span></div>`).join('')}</div></div>
+    <p class="small muted" style="margin:8px 0 0">Import du ${a.importe_le}. Les totaux Nice / EHPAD du mois (ventilation des honoraires) sont remplis automatiquement. Réimporte les deux exports en fin de mois pour la version définitive.</p>`;
+  if (typeof Chart === 'function') chart('c-docto-jours', { type: 'bar', data: { labels: a.jours.map(j => j.date.slice(8)), datasets: [{ label: 'Riquier Nice', data: a.jours.map(j => j.NICE), backgroundColor: '#2b5db3' }, { label: 'Roquebrune EHPAD', data: a.jours.map(j => j.EHPAD), backgroundColor: '#1d7a4d' }] }, options: optBarres(true, false) });
+}
+$('#d-mois').onchange = () => { docto.mois = $('#d-mois').value; rendreDocto(); };
+function rendrePea() { rendreDocto(); rendreCrypto(); rendrePerformance(); rendrePositions('PEA', 'pea', 'Importe le fichier « positions instantanées » du PEA (Opérations › Importer) pour voir la répartition par ETF et par pays.'); rendrePositions('AV', 'av', 'Importe l\'export Excel « données financières » de Linxea (Opérations › Importer) pour voir la répartition par support et par pays.'); rendreGlobale(); }
 function rendrePositions(support, id, aide) {
   const r = diversification.calculer(etat.data, etat.rules, support);
   if (!r) { $('#t-' + id + '-etf').innerHTML = `<p class="muted small">${aide}</p>`; $('#t-' + id + '-pays').innerHTML = ''; $('#c-' + id + '-etf').innerHTML = ''; $('#k-' + id + '-date').textContent = ''; $('#k-' + id + '-src').textContent = ''; return; }
