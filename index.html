@@ -47,7 +47,27 @@ nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9p
 .ligne-op .ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none;color:#fff}
 .ligne-op .txt{flex:1;min-width:0}.ligne-op .txt small{display:block;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ligne-op .mt{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
-.ligne-op.clic:hover{background:#fafaf7}.ligne-op .crayon{color:var(--muted);font-size:14px;opacity:.55;flex:none;width:22px;text-align:center}.ligne-op.clic:hover .crayon{opacity:1;color:var(--acc)}
+.ligne-op.clic:hover{background:#fafaf7}
+.ligne-op .sel{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex:none;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:.12s;margin-left:-4px}
+.ligne-op:hover .sel,.ligne-op.coche .sel,.liste-selection .ligne-op .sel{opacity:1}
+.ligne-op.coche .sel{background:var(--acc);border-color:var(--acc);color:#fff;font-size:13px}
+.ligne-op.coche{background:var(--accbg)}
+@media (hover:none){.ligne-op .sel{opacity:.6}}
+#lot-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:9;background:var(--ink);color:#fff;border-radius:16px;padding:10px 14px;display:flex;align-items:center;gap:12px;font-size:14px;box-shadow:0 8px 28px rgba(0,0,0,.3);max-width:calc(100vw - 24px);flex-wrap:wrap}
+#lot-bar.hidden{display:none}
+#lot-bar button{font:inherit;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:10px;padding:6px 12px;cursor:pointer}
+#lot-bar button.primary{background:#fff;color:var(--ink);border-color:#fff;font-weight:600}
+#lot-bar label{font-size:13px;opacity:.85;display:inline-flex;align-items:center;gap:5px}
+@media (max-width:700px){#lot-bar{bottom:82px}}
+#cat-picker{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:10;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.25);width:420px;max-width:calc(100vw - 24px);max-height:60vh;display:flex;flex-direction:column}
+#cat-picker.hidden{display:none}
+#cat-picker input{margin:10px;padding:9px 12px;font-size:15px;border-radius:10px}
+#cat-picker .liste{overflow:auto;padding:0 6px 8px}
+#cat-picker .fam{font-size:12px;color:var(--muted);padding:8px 8px 2px;text-transform:uppercase;letter-spacing:.03em}
+#cat-picker .opt{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer;font:inherit;border:none;background:none;width:100%;text-align:left;color:var(--ink)}
+#cat-picker .opt:hover,#cat-picker .opt.actif{background:var(--accbg)}
+#cat-picker .opt .ico{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;flex:none}
+@media (max-width:700px){#cat-picker{bottom:150px}}.ligne-op .crayon{color:var(--muted);font-size:14px;opacity:.55;flex:none;width:22px;text-align:center}.ligne-op.clic:hover .crayon{opacity:1;color:var(--acc)}
 .boite-card{max-width:560px;margin:0 auto}
 .boite-card .nom{font-size:20px;font-weight:700;margin:4px 0}
 .boite-card .prop{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;margin:8px 0}
@@ -341,13 +361,15 @@ input,select,textarea{max-width:100%}
 </section>
 
 </main>
+<div id="lot-bar" class="hidden"><b id="lot-n"></b><span id="lot-total" style="opacity:.8"></span><button class="primary" id="lot-deplacer">Déplacer vers…</button><button id="lot-tous">Tout sélectionner</button><label><input type="checkbox" id="lot-regle" checked> apprendre pour ces marchands</label><button id="lot-annuler">✕</button></div>
+<div id="cat-picker" class="hidden"><input type="text" id="cat-picker-q" placeholder="Tape une catégorie… (ex. cad → Cadeaux)" autocomplete="off"><div class="liste" id="cat-picker-liste"></div></div>
 <div id="annuler-bar" class="hidden"><span id="annuler-txt"></span><button id="annuler-btn">↩ Annuler la correction</button></div>
 <div id="toasts"></div>
 
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.1.0';
 const SCHEMA = 1;
 
 const util = {
@@ -2247,7 +2269,7 @@ const ghPrefs = {
   ecrire(o) { if (o) localStorage.setItem('budget.github', JSON.stringify(o)); else localStorage.removeItem('budget.github'); }
 };
 const NAV_PARENT = { boite: 'accueil', avance: 'plus', categories: 'plus' };
-function montrerEcran(nom) { const nav = NAV_PARENT[nom] || nom; document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nav)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; window.scrollTo(0, 0); toutRendre(); }
+function montrerEcran(nom) { if (nom !== 'import') { $('#lot-bar').classList.add('hidden'); $('#cat-picker').classList.add('hidden'); } const nav = NAV_PARENT[nom] || nom; document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nav)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; window.scrollTo(0, 0); toutRendre(); }
 // écran de connexion seul (nav et écrans masqués) ou application
 function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => { s.classList.toggle('hidden', !connecte); if (!connecte) s.classList.remove('on'); }); if (!connecte) { $('#annuler-bar').classList.add('hidden'); } else if (!document.querySelector('section.screen.on')) montrerEcran('accueil'); }
 function montrerFormulaireGitHub(msg) { montrerApp(false); $('#gh-form').classList.remove('hidden'); $('#gh-ouvrir').classList.add('hidden'); $('#gh-msg').textContent = msg || ''; if (msg) $('#gh-phrase').focus(); }
@@ -2468,14 +2490,57 @@ function rendreOps() {
     if (o.date_op !== jour) { jour = o.date_op; html += `<div class="grp" style="display:flex;justify-content:space-between;color:var(--muted);font-size:13px"><span>${jourLisible(jour)}</span></div>`; }
     const fam = o.categorie ? o.categorie.split('.')[0] : 'NC';
     const sous = [o.compte === 'perso' ? '' : o.compte === 'pro' ? 'pro' : SUPPORTS_LIBELLES[o.compte] || o.compte, libelleCourt(o.categorie), o.annotation.tiers, util.moisOp(o) !== util.mois(o.date_op) ? '→ compté en ' + moisLisible(util.moisOp(o)) : ''].filter(Boolean).join(' · ');
-    html += `<div class="ligne-op clic" data-id="${o.id}" style="cursor:pointer"><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${esc(sous)}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span><span class="crayon" title="corriger la catégorie">✎</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`;
+    const coche = etat.selection.has(o.id);
+    html += `<div class="ligne-op clic${coche ? ' coche' : ''}" data-id="${o.id}" style="cursor:pointer"><span class="sel" title="sélectionner (Maj+clic : plage)">${coche ? '✓' : ''}</span><span class="ico" style="background:${o.categorie ? couleur(fam) : '#e9e7df'};color:${o.categorie ? '#fff' : 'var(--bad)'}">${o.categorie ? icone(fam) : '?'}</span><span class="txt"><span>${esc(norm.nomLisible(o))}${o.statut === 'a_valider' ? ' <span class="badge warn">à confirmer</span>' : ''}</span><small title="${esc(o.libelle)}">${esc(sous)}</small></span><span class="mt" style="color:${o.montant < 0 ? 'var(--ink)' : 'var(--ok)'}">${o.montant > 0 ? '+' : ''}${util.montantFr(o.montant)} €</span><span class="crayon" title="corriger la catégorie">✎</span></div>${etat.editionId === o.id ? editeurHtml(o) : ''}`;
   }
+  z.classList.toggle('liste-selection', etat.selection.size > 0);
   z.innerHTML = html || '<p class="muted small">aucune opération</p>';
+  lot.visibles = ops.map(o => o.id);
+  z.querySelectorAll('.ligne-op .sel, .ligne-op .ico').forEach(el => el.onclick = (e) => { e.stopPropagation(); const id = el.closest('.ligne-op').dataset.id; if (e.shiftKey && lot.dernier) { const a = lot.visibles.indexOf(lot.dernier), b = lot.visibles.indexOf(id); if (a >= 0 && b >= 0) for (const x of lot.visibles.slice(Math.min(a, b), Math.max(a, b) + 1)) etat.selection.add(x); } else if (etat.selection.has(id)) etat.selection.delete(id); else etat.selection.add(id); lot.dernier = id; rendreOps(); });
+  rendreLot();
   $('#ops-more').innerHTML = ops.length > opsLimite ? `${ops.length - opsLimite} de plus — <a href="#" id="ops-plus">afficher la suite</a>` : '';
   const plus = $('#ops-plus'); if (plus) plus.onclick = (e) => { e.preventDefault(); opsLimite += 150; rendreOps(); };
   z.querySelectorAll('.ligne-op.clic').forEach(el => el.onclick = () => { etat.editionId = etat.editionId === el.dataset.id ? null : el.dataset.id; rendreOps(); });
   brancherEditeur(z);
 }
+// ---------- déplacement groupé (v1.1) : sélection → barre flottante → choix de catégorie avec recherche → application + règles
+const lot = { visibles: [], dernier: null, cible: null };
+function rendreLot() {
+  const n = etat.selection.size, bar = $('#lot-bar');
+  bar.classList.toggle('hidden', !n || !$('#screen-import').classList.contains('on'));
+  if (!n) { $('#cat-picker').classList.add('hidden'); return; }
+  const ops = etat.data.operations.filter(o => etat.selection.has(o.id));
+  $('#lot-n').textContent = `${n} ligne${n > 1 ? 's' : ''}`; $('#lot-total').textContent = fmtE(Math.round(ops.reduce((s, o) => s + o.montant, 0) * 100) / 100);
+  $('#lot-tous').textContent = lot.visibles.every(id => etat.selection.has(id)) ? 'Tout désélectionner' : `Tout sélectionner (${lot.visibles.length})`;
+}
+function rendrePicker(q) {
+  q = norm.stripAccents(q || '').toUpperCase().trim();
+  const ops = etat.data.operations.filter(o => etat.selection.has(o.id)); const pro = ops.some(o => o.compte === 'pro'), perso = ops.some(o => o.compte === 'perso' || csv.estEpargne(o.compte));
+  const spheres = pro && !perso ? ['pro'] : perso && !pro ? ['perso', 'epargne'] : ['perso', 'epargne', 'pro'];
+  let html = ''; let premier = true;
+  for (const sph of spheres) for (const f of catalogue.famillesOrdonnees(etat.rules, sph)) {
+    const codes = catalogue.codesOrdonnes(etat.rules, f).filter(c => !CAT[c].masque).filter(c => !q || norm.stripAccents(CAT[c].libelle + ' ' + (FAMILLES[f] || '') + ' ' + c).toUpperCase().includes(q));
+    if (!codes.length) continue;
+    html += `<div class="fam">${esc(FAMILLES[f] || f)}</div>` + codes.map(c => { const h = `<button class="opt${premier ? ' actif' : ''}" data-code="${c}"><span class="ico" style="background:${couleur(f)}">${catalogue.icone(etat.rules, f)}</span><span>${esc(c === f ? (FAMILLES[f] || f) : CAT[c].libelle)}</span><span class="small muted" style="margin-left:auto">${c}</span></button>`; premier = false; return h; }).join('');
+  }
+  $('#cat-picker-liste').innerHTML = html || '<p class="small muted" style="padding:8px">rien ne correspond</p>';
+  $('#cat-picker-liste').querySelectorAll('.opt').forEach(b => b.onclick = () => appliquerLot(b.dataset.code));
+}
+async function appliquerLot(categorie) {
+  const ops = etat.data.operations.filter(o => etat.selection.has(o.id)); if (!ops.length) return;
+  const regle = $('#lot-regle').checked;
+  annulation.avant(ops, `${ops.length} ligne(s) → ${libelleCourt(categorie)}`);
+  let regles = 0;
+  for (const o of ops) { const r = engine.corriger(etat.data, etat.rules, machine, o, { categorie, entite: o.compte === 'pro' ? (o.entite ?? engine.entiteDefaut(categorie) ?? '') : undefined, poche: o.poche, etendre: 'exact', montant: /MACSF/.test(o.cle), creerRegle: regle }); if (r) regles++; }
+  etat.selection.clear(); $('#cat-picker').classList.add('hidden'); marquer('data'); marquer('rules'); recategoriser();
+  toast(`${ops.length} ligne(s) → ${libelleCourt(categorie)}${regles ? ` · ${regles} règle(s) apprise(s)` : ''}`, 'ok'); annulation.montrer(`${ops.length} ligne(s) → ${libelleCourt(categorie)}`);
+  await sauver();
+}
+$('#lot-deplacer').onclick = () => { const pk = $('#cat-picker'); pk.classList.toggle('hidden'); if (!pk.classList.contains('hidden')) { $('#cat-picker-q').value = ''; rendrePicker(''); $('#cat-picker-q').focus(); } };
+$('#cat-picker-q').oninput = () => rendrePicker($('#cat-picker-q').value);
+$('#cat-picker-q').onkeydown = (e) => { if (e.key === 'Enter') { const a = $('#cat-picker-liste .opt.actif') || $('#cat-picker-liste .opt'); if (a) appliquerLot(a.dataset.code); } if (e.key === 'Escape') $('#cat-picker').classList.add('hidden'); };
+$('#lot-tous').onclick = () => { if (lot.visibles.every(id => etat.selection.has(id))) etat.selection.clear(); else for (const id of lot.visibles) etat.selection.add(id); rendreOps(); };
+$('#lot-annuler').onclick = () => { etat.selection.clear(); $('#cat-picker').classList.add('hidden'); rendreOps(); };
 $('#f-comptes').querySelectorAll('button').forEach(b => b.onclick = () => { etat.filtres.compte = b.dataset.v; opsLimite = 150; rendreOps(); });
 $('#f-cat').onchange = () => { etat.filtres.cat = $('#f-cat').value; opsLimite = 150; rendreOps(); };
 $('#f-mois').onchange = () => { etat.filtres.mois = $('#f-mois').value; opsLimite = 150; rendreOps(); };
