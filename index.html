@@ -2769,7 +2769,8 @@ let acMois = null;
 function rendreAccueil() {
   if (!$('#screen-accueil').classList.contains('on')) return;
   if (!etat.data) { $('#ac-chiffres').innerHTML = ''; $('#ac-todo').innerHTML = '<li><span class="txt">Connecte-toi, puis importe des CSV.</span></li>'; return; }
-  const mois = stats.mois(etat.data), moisP = bord.moisCompte(etat.data, 'perso');
+  // mois par défaut : le dernier où il y a eu des dépenses perso (un salaire viré en avance ne suffit pas à « ouvrir » le mois suivant)
+  const mois = stats.mois(etat.data), moisP = bord.moisCompte(etat.data, 'perso').filter(m => bord.perso(etat.data, m).depenses > 0);
   if (!acMois || !mois.includes(acMois)) acMois = moisP[moisP.length - 1] || mois[mois.length - 1] || null;
   const i = mois.indexOf(acMois), prec = i > 0 ? mois[i - 1] : null;
   $('#ac-mois').textContent = moisLisible(acMois); $('#ac-prec').disabled = i <= 0; $('#ac-suiv').disabled = i < 0 || i >= mois.length - 1;
@@ -2907,7 +2908,7 @@ function rendreAnalyse() {
   $('#an-mode').value = an.mode;
   const val = $('#an-valeur'); const opts = an.mode === 'annee' ? graphes.annees(etat.data).slice().reverse() : an.mode === 'mois' ? mois.slice().reverse() : [];
   val.classList.toggle('hidden', !opts.length);
-  if (opts.length) { if (!opts.includes(an.valeur)) { const mp = bord.moisCompte(etat.data, 'perso'); const dern = an.mode === 'mois' ? mp[mp.length - 1] : (mp[mp.length - 1] || '').slice(0, 4); an.valeur = opts.includes(dern) ? dern : opts[0]; } val.innerHTML = opts.map(v => `<option value="${v}"${v === an.valeur ? ' selected' : ''}>${an.mode === 'mois' ? moisLisible(v) : v}</option>`).join(''); }
+  if (opts.length) { if (!opts.includes(an.valeur)) { const mp = bord.moisCompte(etat.data, 'perso').filter(m => bord.perso(etat.data, m).depenses > 0); const dern = an.mode === 'mois' ? mp[mp.length - 1] : (mp[mp.length - 1] || '').slice(0, 4); an.valeur = opts.includes(dern) ? dern : opts[0]; } val.innerHTML = opts.map(v => `<option value="${v}"${v === an.valeur ? ' selected' : ''}>${an.mode === 'mois' ? moisLisible(v) : v}</option>`).join(''); }
   const liste = anMois();
   rendreSankey('s-analyse', graphes.sankeyPerso(etat.data, liste, an.deplie), (n) => {
     if (/^(Reste|Puisé)$/.test(n.name)) return;
