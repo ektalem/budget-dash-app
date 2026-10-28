@@ -206,7 +206,7 @@ input,select,textarea{max-width:100%}
     <div id="gh-form">
       <p class="small" id="gh-msg" style="color:var(--bad);margin:0 0 8px"></p>
       <div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
-        <label class="small">Dépôt privé<br><input id="gh-depot" placeholder="proprietaire/depot" style="width:220px" autocapitalize="none" autocorrect="off"></label>
+        <label class="small">Dépôt privé<br><input id="gh-depot" placeholder="ektalem/budget-dash" style="width:220px" autocapitalize="none" autocorrect="off"></label>
         <label class="small">Branche<br><input id="gh-branche" value="main" style="width:90px" autocapitalize="none"></label>
         <label class="small" title="Fine-grained token limité à ce dépôt, Contents : lecture et écriture">Token GitHub<br><input id="gh-token" type="password" placeholder="github_pat_…" style="width:260px" autocomplete="off"></label>
         <label class="small" title="La même sur tous les appareils. Perdue = données irrécupérables : note-la dans un gestionnaire de mots de passe.">Phrase de passe<br><input id="gh-phrase" type="password" placeholder="quatre ou cinq mots" style="width:260px" autocomplete="off"> <span id="gh-force" class="badge gris">force ?</span></label>
@@ -474,7 +474,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.9.5';
+const APP_VERSION = '0.9.6';
 const SCHEMA = 1;
 
 const util = {
@@ -2310,7 +2310,7 @@ const ghPrefs = {
 const NAV_PARENT = { boite: 'accueil', bord: 'plus', avance: 'plus', categories: 'plus' };
 function montrerEcran(nom) { const nav = NAV_PARENT[nom] || nom; document.querySelectorAll('#nav button').forEach(x => x.classList.toggle('on', x.dataset.screen === nav)); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('on', s.id === 'screen-' + nom)); etat.editionId = null; window.scrollTo(0, 0); toutRendre(); }
 // écran de connexion seul (nav et écrans masqués) ou application
-function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => s.classList.toggle('hidden', !connecte)); }
+function montrerApp(connecte) { $('#ecran-connexion').classList.toggle('hidden', connecte); $('#nav').classList.toggle('hidden', !connecte); document.querySelectorAll('section.screen').forEach(s => { s.classList.toggle('hidden', !connecte); if (!connecte) s.classList.remove('on'); }); if (!connecte) { $('#annuler-bar').classList.add('hidden'); } else if (!document.querySelector('section.screen.on')) montrerEcran('accueil'); }
 function montrerFormulaireGitHub(msg) { montrerApp(false); $('#gh-form').classList.remove('hidden'); $('#gh-ouvrir').classList.add('hidden'); $('#gh-msg').textContent = msg || ''; if (msg) $('#gh-phrase').focus(); }
 function montrerCode(msg) { montrerApp(false); $('#gh-form').classList.add('hidden'); $('#gh-ouvrir').classList.remove('hidden'); $('#gh-ouvrir-msg').textContent = msg || 'Saisis ton code.'; $('#gh-ouvrir-code').value = ''; $('#gh-ouvrir-code').focus(); }
 function deconnecterUI(msg) { backendGitHub.cle = null; backendGitHub.cfg = null; backendGitHub.cache = { rules: null, data: null }; backendGitHub.majSync('deconnecte'); montrerFormulaireGitHub(msg); }
