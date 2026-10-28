@@ -30,7 +30,10 @@ nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9p
 .chiffre{background:#fafaf7;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .chiffre .lbl{font-size:12px;color:var(--muted)}
 .chiffre .big{font-size:24px;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums;line-height:1.2;margin:2px 0}
-.chiffre .delta{font-size:12px;color:var(--muted)}.delta.pos{color:var(--ok)}.delta.neg{color:var(--bad)}
+.chiffre .delta{font-size:12px;color:var(--muted)}
+.chiffre[data-filtre]{cursor:pointer;transition:.12s}.chiffre[data-filtre]:hover{border-color:var(--acc);background:var(--accbg)}
+.fam-row[data-filtre]{cursor:pointer}.fam-row[data-filtre]:hover{background:#fafaf7}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chips span{background:var(--accbg);color:var(--acc);border-radius:14px;padding:3px 10px;font-size:13px;display:inline-flex;align-items:center;gap:6px}.chips span b{cursor:pointer;font-weight:600}.delta.pos{color:var(--ok)}.delta.neg{color:var(--bad)}
 .todo{list-style:none;margin:0;padding:0}
 .todo li{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}
 .todo li:last-child{border-bottom:none}.todo li:hover{background:#fafaf7}
@@ -225,7 +228,7 @@ input,select,textarea{max-width:100%}
   <div class="mois-nav"><button class="b small" id="ac-prec">‹</button><b id="ac-mois">—</b><button class="b small" id="ac-suiv">›</button></div>
   <div class="card"><div class="chiffres" id="ac-chiffres"></div></div>
   <div class="card"><h2>À faire</h2><ul class="todo" id="ac-todo"></ul></div>
-  <div class="card"><h2 title="D'où vient l'argent du mois, où il va. Clique sur un bloc pour le détail dans Analyse.">Flux du mois</h2><div class="sankey" id="s-accueil"></div></div>
+  <div class="card"><h2 title="D'où vient l'argent du mois, où il va. Clique sur un bloc pour voir ses opérations.">Flux du mois</h2><div class="sankey" id="s-accueil"></div></div>
 </section>
 
 <section class="screen" id="screen-boite">
@@ -259,6 +262,7 @@ input,select,textarea{max-width:100%}
       <label class="small"><input type="checkbox" id="f-aconfirmer"> à confirmer</label>
       <span class="muted small" id="ops-count" style="margin-left:auto"></span>
     </div>
+    <div class="chips hidden" id="f-chips"></div>
     <div class="drop" id="drop" style="padding:10px;margin-top:8px;font-size:13px">ou glisse ici les fichiers : CSV Bourso, Bitstack, Excel Linxea, exports Doctolib</div>
     <div id="import-resultat"></div>
     <div class="kv small" style="margin-top:6px" id="etat-fichiers"></div>
@@ -374,7 +378,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.10.0';
+const APP_VERSION = '0.10.1';
 const SCHEMA = 1;
 
 const util = {
@@ -2430,9 +2434,24 @@ function catHtml(o) {
 let opsLimite = 150;
 function optionsFiltreCat() {
   const groupes = [['Perso', 'perso'], ['Épargne', 'epargne'], ['Pro', 'pro']];
-  return '<option value="">toutes catégories</option><option value="NC">non catégorisé</option>' + groupes.map(([nom, sph]) => { const fams = catalogue.famillesOrdonnees(etat.rules, sph); return `<optgroup label="${nom}">${fams.map(f => { const codes = catalogue.codesOrdonnes(etat.rules, f).filter(c => !CAT[c].masque); return `<option value="${f}">${esc(catalogue.icone(etat.rules, f))} ${esc(FAMILLES[f] || f)}</option>` + codes.filter(c => c !== f).map(c => `<option value="${c}">&nbsp;&nbsp;&nbsp;${esc(CAT[c].libelle)}</option>`).join(''); }).join('')}</optgroup>`; }).join('');
+  return '<option value="">toutes catégories</option><option value="NC">non catégorisé</option><option value="DEP">dépenses (perso)</option><option value="ENC">encaissements (pro)</option><option value="CHG">charges et cotisations (pro)</option>' + groupes.map(([nom, sph]) => { const fams = catalogue.famillesOrdonnees(etat.rules, sph); return `<optgroup label="${nom}">${fams.map(f => { const codes = catalogue.codesOrdonnes(etat.rules, f).filter(c => !CAT[c].masque); return `<option value="${f}">${esc(catalogue.icone(etat.rules, f))} ${esc(FAMILLES[f] || f)}</option>` + codes.filter(c => c !== f).map(c => `<option value="${c}">&nbsp;&nbsp;&nbsp;${esc(CAT[c].libelle)}</option>`).join(''); }).join('')}</optgroup>`; }).join('');
 }
+// Filtres spéciaux (justification des totaux) : DEP = dépenses perso (hors interne, hors budget), ENC = encaissements pro (HON + ENT), CHG = charges et cotisations pro
+const FILTRES_SPECIAUX = { DEP: 'Dépenses', ENC: 'Encaissements', CHG: 'Charges et cotisations', REV: 'Revenus', EPG: 'Épargne et investissement', NC: 'Non catégorisé' };
 function filtrerOps(compte, cat, mois) { etat.filtres.compte = compte || ''; etat.filtres.cat = cat || ''; etat.filtres.mois = mois || ''; $('#f-texte').value = ''; $('#f-aconfirmer').checked = false; opsLimite = 150; montrerEcran('import'); }
+function okFiltreCat(o, cat) {
+  if (!cat) return true; const f = (o.categorie || '').split('.')[0];
+  if (cat === 'NC') return !o.categorie;
+  if (cat === 'DEP') return o.montant < 0 && !!o.categorie && !o.interne && !/^(HB|INT|EPG|PREL|REV)$/.test(f) || (o.montant > 0 && o.type === 'avoir');
+  if (cat === 'ENC') return /^(HON|ENT)$/.test(f);
+  if (cat === 'CHG') return /^(RETRO|FRAIS|DEPL|REPAS|COT)$/.test(f);
+  if (cat.includes('.')) return o.categorie === cat;
+  return f === cat;
+}
+function libelleFiltre(cat) { return FILTRES_SPECIAUX[cat] || (cat.includes('.') ? libelleCourt(cat) : (FAMILLES[cat] || cat)); }
+// tout élément [data-filtre='{"compte","cat","mois"}'] envoie vers Opérations filtré
+function brancherFiltres(root) { (root || document).querySelectorAll('[data-filtre]').forEach(el => { el.onclick = (e) => { e.stopPropagation(); const f = JSON.parse(el.dataset.filtre); filtrerOps(f.compte, f.cat, f.mois); }; el.title = el.title || 'voir les opérations'; }); }
+function df(compte, cat, mois) { return ` data-filtre='${JSON.stringify({ compte: compte || '', cat: cat || '', mois: mois || '' })}'`; }
 function rendreOps() {
   const z = $('#ops-liste');
   if (!etat.data) { z.innerHTML = '<p class="muted small">Connecte-toi, puis importe des CSV.</p>'; $('#ops-count').textContent = ''; return; }
@@ -2443,12 +2462,16 @@ function rendreOps() {
   $('#f-comptes').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === (F.compte || '')));
   const fa = $('#f-aconfirmer').checked, ft = norm.stripAccents($('#f-texte').value).toUpperCase().trim();
   const num = ft && /^-?[\d\s]+([.,]\d+)?$/.test(ft) ? Number(ft.replace(/\s/g, '').replace(',', '.')) : null;
-  const okCat = (o) => !F.cat || (F.cat === 'NC' ? !o.categorie : F.cat.includes('.') || CAT[F.cat] && CATALOGUE.some(x => x[0] === F.cat && !CATALOGUE.some(y => y[0].startsWith(F.cat + '.'))) ? o.categorie === F.cat : (o.categorie || '').split('.')[0] === F.cat);
+  const okCat = (o) => okFiltreCat(o, F.cat);
   let ops = etat.data.operations.filter(o => (!F.compte || (F.compte === 'epargne' ? csv.estEpargne(o.compte) : o.compte === F.compte)) && (!F.mois || util.mois(o.date_op) === F.mois) && okCat(o) && (!fa || o.statut === 'a_valider')
     && (!ft || (num !== null ? util.cents(o.montant) === util.cents(num) : norm.stripAccents(norm.nomLisible(o) + ' ' + o.libelle + ' ' + (o.categorie || '') + ' ' + libelleCourt(o.categorie) + ' ' + (o.annotation.tiers || '')).toUpperCase().includes(ft))));
   ops.sort((a, b) => b.date_op.localeCompare(a.date_op) || a.compte.localeCompare(b.compte));
   const total = ops.reduce((s, o) => s + o.montant, 0);
   $('#ops-count').textContent = `${ops.length} ligne(s)${F.cat || F.mois || ft ? ' · ' + fmtE(Math.round(total * 100) / 100) : ''}`;
+  // chips des filtres actifs
+  const chips = []; if (F.compte) chips.push(['compte', F.compte === 'epargne' ? 'Épargne' : SUPPORTS_LIBELLES[F.compte] || F.compte]); if (F.cat) chips.push(['cat', libelleFiltre(F.cat)]); if (F.mois) chips.push(['mois', moisLisible(F.mois)]);
+  $('#f-chips').classList.toggle('hidden', !chips.length); $('#f-chips').innerHTML = chips.map(([k, l]) => `<span>${esc(l)}<b data-k="${k}" title="retirer">✕</b></span>`).join('') + (chips.length ? `<span style="background:none;color:var(--muted)">= ${fmtE(Math.round(total * 100) / 100)}</span>` : '');
+  $('#f-chips').querySelectorAll('b[data-k]').forEach(b => b.onclick = () => { F[b.dataset.k] = ''; rendreOps(); });
   const vus = ops.slice(0, opsLimite); let jour = null, html = '';
   const jourLisible = (d) => { const x = new Date(d + 'T00:00:00Z'); const t = x.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }); return t.charAt(0).toUpperCase() + t.slice(1); };
   for (const o of vus) {
@@ -2546,7 +2569,7 @@ function rendrePro() {
   const z = $('#pr-contenu');
   if (!proMois) { z.innerHTML = '<div class="card"><p class="muted small">Importe le CSV du compte pro et les deux exports Doctolib (Opérations › Importer).</p></div>'; return; }
   const x = pro.mois(etat.data, etat.rules, proMois), c = pro.cumul(etat.data, etat.rules), agg = (etat.data.doctolib || {})[proMois];
-  const chiffre = (lbl, val, sous, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div><span class="delta">${sous || ''}</span></div>`;
+  const chiffre = (lbl, val, sous, cls, filtre) => `<div class="chiffre"${filtre || ''}><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div><span class="delta">${sous || ''}</span></div>`;
   const ecart = (prevu, paye) => prevu === null ? '' : paye ? `<span class="delta ${Math.abs(paye - prevu) < 1 ? 'pos' : 'neg'}">prélevé ${fmtE(paye)} (${paye - prevu >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((paye - prevu) * 100) / 100))})</span>` : '<span class="delta">pas encore prélevée</span>';
   const sansDocto = `<p class="small" style="color:var(--warn);margin:0 0 8px">Pas d'export Doctolib pour ${moisLisible(proMois)} : importe les deux fichiers (un par structure) pour le facturé, la rétro prévue et le versement autorisé.</p>`;
   const N = x.nice, E = x.ehpad, cfg = x.cfg;
@@ -2554,17 +2577,17 @@ function rendrePro() {
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">🏥 Roquebrune EHPAD <span class="muted small">agenda « Belkadi Maxime »</span></h2></div>
       ${x.doctolib ? '' : sansDocto}
-      <div class="chiffres" style="margin-top:8px">${chiffre('Tu peux te verser', E.autorise === null ? '—' : fmtE(E.autorise), E.autorise === null ? '' : `(facturé ${fmtE(E.facture)} − ${fmtE(cfg.ehpad_fixe)}) × ${cfg.ehpad_part} %`, 'pos')}${chiffre('Facturé ce mois', fmtE(E.facture), E.aFacturer ? `+ ${fmtE(E.aFacturer)} encore à facturer` : '')}${chiffre('Rétrocession', fmtE(cfg.ehpad_fixe), ecart(cfg.ehpad_fixe, E.retroPayee))}</div>
-      ${c ? `<p class="small muted" style="margin:10px 0 0">Depuis ${moisLisible(c.depuis)} (${c.mois} mois) : autorisé ${fmtE(c.autorise)} · versé au perso ${fmtE(c.verse)} (tous virements pro → perso) · <b style="color:${c.reste >= 0 ? 'var(--ok)' : 'var(--bad)'}">${c.reste >= 0 ? 'reste ' + fmtE(c.reste) : 'dépassé de ' + fmtE(-c.reste)}</b></p>` : ''}
+      <div class="chiffres" style="margin-top:8px">${chiffre('Tu peux te verser', E.autorise === null ? '—' : fmtE(E.autorise), E.autorise === null ? '' : `(facturé ${fmtE(E.facture)} − ${fmtE(cfg.ehpad_fixe)}) × ${cfg.ehpad_part} %`, 'pos')}${chiffre('Facturé ce mois', fmtE(E.facture), E.aFacturer ? `+ ${fmtE(E.aFacturer)} encore à facturer` : '')}${chiffre('Rétrocession', fmtE(cfg.ehpad_fixe), ecart(cfg.ehpad_fixe, E.retroPayee), '', df('pro', 'RETRO.EHPAD', proMois))}</div>
+      ${c ? `<p class="small muted" style="margin:10px 0 0">Depuis ${moisLisible(c.depuis)} (${c.mois} mois) : autorisé ${fmtE(c.autorise)} · <a href="#"${df('pro', 'PREL', '')}>versé au perso ${fmtE(c.verse)}</a> (tous virements pro → perso) · <b style="color:${c.reste >= 0 ? 'var(--ok)' : 'var(--bad)'}">${c.reste >= 0 ? 'reste ' + fmtE(c.reste) : 'dépassé de ' + fmtE(-c.reste)}</b></p>` : ''}
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">🏢 Riquier Nice <span class="muted small">agenda « Maxime »</span></h2></div>
       ${x.doctolib ? '' : sansDocto}
-      <div class="chiffres" style="margin-top:8px">${chiffre('Facturé ce mois', fmtE(N.facture), N.facture === null ? '' : `cabinet ${fmtE(N.factureCabinet)} · domicile ${fmtE(N.factureDomicile)}${N.aFacturer ? ` · à facturer ${fmtE(N.aFacturer)}` : ''}`)}${chiffre('Rétro prévue', N.retroPrevue === null ? '—' : fmtE(N.retroPrevue), N.retroPrevue === null ? '' : `${cfg.nice_cabinet} % cabinet + ${cfg.nice_domicile} % domicile, sur le facturé`)}${chiffre('Rétro prélevée', N.retroPayee ? fmtE(N.retroPayee) : '—', N.retroPrevue !== null && N.retroPayee ? `écart ${N.retroPayee - N.retroPrevue >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((N.retroPayee - N.retroPrevue) * 100) / 100))}` : N.retroPrevueCA !== null ? `sur tout le CA du mois ce serait ${fmtE(N.retroPrevueCA)}` : '')}</div>
+      <div class="chiffres" style="margin-top:8px">${chiffre('Facturé ce mois', fmtE(N.facture), N.facture === null ? '' : `cabinet ${fmtE(N.factureCabinet)} · domicile ${fmtE(N.factureDomicile)}${N.aFacturer ? ` · à facturer ${fmtE(N.aFacturer)}` : ''}`)}${chiffre('Rétro prévue', N.retroPrevue === null ? '—' : fmtE(N.retroPrevue), N.retroPrevue === null ? '' : `${cfg.nice_cabinet} % cabinet + ${cfg.nice_domicile} % domicile, sur le facturé`)}${chiffre('Rétro prélevée', N.retroPayee ? fmtE(N.retroPayee) : '—', N.retroPrevue !== null && N.retroPayee ? `écart ${N.retroPayee - N.retroPrevue >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((N.retroPayee - N.retroPrevue) * 100) / 100))}` : N.retroPrevueCA !== null ? `sur tout le CA du mois ce serait ${fmtE(N.retroPrevueCA)}` : '', '', df('pro', 'RETRO.RIQUIER', proMois))}</div>
     </div>
     <div class="card">
       <h2>🏦 Compte pro — ${moisLisible(proMois)}</h2>
-      <div class="chiffres">${chiffre('Encaissé', fmtE(x.encaisse), 'CPAM, mutuelles, patients')}${chiffre('Versé au perso', fmtE(x.verse), '')}${chiffre('Charges et cotisations', fmtE(Math.round((x.charges + x.cotisations) * 100) / 100), `rétros, frais ${fmtE(x.charges)} · URSSAF, CARPIMKO ${fmtE(x.cotisations)}`)}</div>
+      <div class="chiffres">${chiffre('Encaissé', fmtE(x.encaisse), 'CPAM, mutuelles, patients', '', df('pro', 'ENC', proMois))}${chiffre('Versé au perso', fmtE(x.verse), '', '', df('pro', 'PREL', proMois))}${chiffre('Charges et cotisations', fmtE(Math.round((x.charges + x.cotisations) * 100) / 100), `rétros, frais ${fmtE(x.charges)} · URSSAF, CARPIMKO ${fmtE(x.cotisations)}`, '', df('pro', 'CHG', proMois))}</div>
       <p class="small muted" style="margin:8px 0 0">Solde du compte pro : ${etat.data.soldes && etat.data.soldes.pro ? fmtE(etat.data.soldes.pro.montant) + ' au ' + etat.data.soldes.pro.date : 'importe le CSV pro'}.</p>
     </div>
     ${agg ? `<details class="card" style="padding:10px 18px"><summary style="cursor:pointer;font-weight:600">Détail Doctolib : ${agg.entites.TOTAL.seances} séances, ${fmtE(agg.entites.TOTAL.ca)} de CA réel${agg.doublons ? ` · ${agg.doublons} séances présentes dans les deux exports, comptées une fois` : ''}</summary>
@@ -2578,6 +2601,7 @@ function rendrePro() {
         <label class="small muted">part à se verser <input type="number" step="1" id="pc-ep" value="${cfg.ehpad_part}" style="width:70px"> %</label>
         <button class="b primary small" id="pc-ok">Enregistrer</button>
       </div></details>`;
+  brancherFiltres(z);
   $('#pc-ok').onclick = async () => { etat.rules.config.pro = { nice_cabinet: Number($('#pc-nc').value), nice_domicile: Number($('#pc-nd').value), ehpad_fixe: Number($('#pc-ef').value), ehpad_part: Number($('#pc-ep').value) }; marquer('rules'); toast('Paramètres enregistrés', 'ok'); await sauver(); };
   if (agg && typeof Chart === 'function') chart('c-docto-jours', { type: 'bar', data: { labels: agg.jours.map(j => j.date.slice(8)), datasets: [{ label: 'Nice', data: agg.jours.map(j => j.NICE), backgroundColor: '#2b5db3' }, { label: 'EHPAD', data: agg.jours.map(j => j.EHPAD), backgroundColor: '#1d7a4d' }] }, options: optBarres(true, false) });
 }
@@ -2588,10 +2612,12 @@ function rendreInvest() {
   if (!$('#screen-invest').classList.contains('on') || !etat.data) return;
   const g = diversification.globale(etat.data, etat.rules), pf = performance.tous(etat.data, etat.rules);
   const chiffre = (lbl, val, sous, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div><span class="delta ${cls || ''}">${sous || ''}</span></div>`;
-  $('#iv-chiffres').innerHTML = chiffre('Patrimoine placé', fmtE(g.total), 'livrets, PEA, assurance-vie, crypto') + chiffre('Investi (hors livrets)', fmtE(pf.investi), 'prix de revient') + chiffre('Gain latent', pf.supports.length ? fmtE(pf.gain) : '—', pf.pct === null ? '' : (pf.gain >= 0 ? '+' : '') + pf.pct + ' %', pf.gain >= 0 ? 'pos' : 'neg');
+  $('#iv-chiffres').innerHTML = chiffre('Patrimoine placé', fmtE(g.total), 'livrets, PEA, assurance-vie, crypto') + chiffre('Investi (hors livrets)', fmtE(pf.investi), 'prix de revient · clic : les versements depuis le perso').replace('<div class="chiffre">', `<div class="chiffre"${df('perso', 'EPG', '')}>`) + chiffre('Gain latent', pf.supports.length ? fmtE(pf.gain) : '—', pf.pct === null ? '' : (pf.gain >= 0 ? '+' : '') + pf.pct + ' %', pf.gain >= 0 ? 'pos' : 'neg');
+  brancherFiltres($('#iv-chiffres'));
   rendreGlobale(); rendreGrPatrimoine(); rendrePerformance(); rendreCrypto();
   rendrePositions('PEA', 'pea', 'Importe le fichier « positions instantanées » du PEA (Opérations › Importer).');
   rendrePositions('AV', 'av', 'Importe l\'export Excel « données financières » de Linxea (Opérations › Importer).');
+  brancherFiltres($('#screen-invest'));
 }
 function rendrePositions(support, id, aide) {
   const r = diversification.calculer(etat.data, etat.rules, support);
@@ -2636,7 +2662,7 @@ function rendrePerformance() {
   if (!pf.supports.length) { $('#t-perf').innerHTML = '<p class="muted small">Importe les fichiers de positions (PEA, Linxea, Bitstack) ou saisis une valorisation : investi, valeur et gain apparaîtront ici.</p>'; videChart('c-perf', ''); $('#k-perf-date').textContent = ''; return; }
   const chiffre = (lbl, val, sous, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big">${val}</div><span class="delta ${cls || ''}">${sous}</span></div>`;
   const srcLib = { fichier: 'investi : fichier', pru: 'investi : PRU × parts', versements: 'investi : cumul des versements' };
-  $('#t-perf').innerHTML = pf.supports.map(x => `<div class="fam-row" style="cursor:default"><span class="ico" style="background:${couleur(x.support)}">${{ PEA: '📈', AV: '🛡️', CRYPTO: '🪙' }[x.support]}</span><span class="nom">${SUPPORTS_LIBELLES[x.support]}<small class="muted" style="display:block">${srcLib[x.source]} · valeur au ${x.date}</small></span><span class="pc" style="min-width:60px;color:${x.gain >= 0 ? 'var(--ok)' : 'var(--bad)'}">${x.pct === null ? '' : (x.gain >= 0 ? '+' : '') + x.pct + ' %'}</span><span class="mt">${fmtE(x.valeur)}<small class="muted" style="display:block;font-weight:400">investi ${fmtE(x.investi)} · ${x.gain >= 0 ? '+' : ''}${fmtE(x.gain)}</small></span></div>`).join('');
+  $('#t-perf').innerHTML = pf.supports.map(x => `<div class="fam-row"${df('perso', { PEA: 'EPG.PEA', AV: 'EPG.AV', CRYPTO: 'EPG.CRYPTO' }[x.support], '')} title="voir les versements"><span class="ico" style="background:${couleur(x.support)}">${{ PEA: '📈', AV: '🛡️', CRYPTO: '🪙' }[x.support]}</span><span class="nom">${SUPPORTS_LIBELLES[x.support]}<small class="muted" style="display:block">${srcLib[x.source]} · valeur au ${x.date}</small></span><span class="pc" style="min-width:60px;color:${x.gain >= 0 ? 'var(--ok)' : 'var(--bad)'}">${x.pct === null ? '' : (x.gain >= 0 ? '+' : '') + x.pct + ' %'}</span><span class="mt">${fmtE(x.valeur)}<small class="muted" style="display:block;font-weight:400">investi ${fmtE(x.investi)} · ${x.gain >= 0 ? '+' : ''}${fmtE(x.gain)}</small></span></div>`).join('');
   if (typeof Chart === 'function') { const c = performance.courbe(etat.data); if (c.mois.length >= 2) chart('c-perf', { type: 'line', data: { labels: c.mois, datasets: [{ label: 'Valeur', data: c.valeur, borderColor: '#1d7a4d', backgroundColor: '#1d7a4d22', fill: true, tension: .2, spanGaps: true }, { label: 'Versé (cumul)', data: c.verse, borderColor: '#2b5db3', borderDash: [4, 4], tension: .2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v.toLocaleString('fr-FR') } } }, plugins: { legend: { position: 'bottom' }, tooltip: tipEuro } } }); else videChart('c-perf', 'courbe disponible à partir de deux mois'); }
 }
 function rendreGlobale() {
@@ -2656,7 +2682,7 @@ function rendreGrPatrimoine() {
   const srcLib = { csv: 'CSV du compte', saisie: 'saisi dans Mois', report: 'reporté (dernier connu)', versements: 'cumul des versements (pas de valorisation saisie)' };
   let total = 0;
   const ICO_SUP = { LA: '🏦', LEP: '🏦', LDDS: '🏦', PEA: '📈', AV: '🛡️', CRYPTO: '🪙' };
-  $('#t-patri').innerHTML = SUPPORTS_PATRIMOINE.map(k => { const d = p.dernier[k]; if (d) total += d.montant; return `<div class="cpt"><span><span class="ico" style="display:inline-flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:${couleur(k)};color:#fff;margin-right:8px">${ICO_SUP[k]}</span>${SUPPORTS_LIBELLES[k]}<small class="muted" style="display:block;margin-left:36px">${d ? `${d.mois} · ${srcLib[d.source]}` : 'inconnu : CSV, fichier positions ou saisie'}</small></span><span class="mt">${d ? fmtE(d.montant) : '—'}</span></div>`; }).join('') + `<div class="cpt" style="font-weight:700"><span>Total</span><span class="mt">${fmtE(Math.round(total * 100) / 100)}</span></div>`;
+  $('#t-patri').innerHTML = SUPPORTS_PATRIMOINE.map(k => { const d = p.dernier[k]; if (d) total += d.montant; return `<div class="cpt"${csv.estEpargne(k) ? df(k, '', '') + ' style="cursor:pointer" title="voir les mouvements du compte"' : ''}><span><span class="ico" style="display:inline-flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:${couleur(k)};color:#fff;margin-right:8px">${ICO_SUP[k]}</span>${SUPPORTS_LIBELLES[k]}<small class="muted" style="display:block;margin-left:36px">${d ? `${d.mois} · ${srcLib[d.source]}` : 'inconnu : CSV, fichier positions ou saisie'}</small></span><span class="mt">${d ? fmtE(d.montant) : '—'}</span></div>`; }).join('') + `<div class="cpt" style="font-weight:700"><span>Total</span><span class="mt">${fmtE(Math.round(total * 100) / 100)}</span></div>`;
 }
 
 // ---------- annulation (v0.9.1) : chaque validation (boîte ou éditeur) prend un instantané des lignes touchées et des règles ; « Annuler » le restitue
@@ -2695,8 +2721,9 @@ function rendreAccueil() {
   $('#ac-mois').textContent = moisLisible(acMois); $('#ac-prec').disabled = i <= 0; $('#ac-suiv').disabled = i < 0 || i >= mois.length - 1;
   if (!acMois) { $('#ac-chiffres').innerHTML = ''; $('#ac-todo').innerHTML = '<li><span class="txt">Importe des CSV pour commencer.</span></li>'; $('#s-accueil').innerHTML = ''; return; }
   const p = bord.perso(etat.data, acMois), pp = prec ? bord.perso(etat.data, prec) : null;
-  const chiffre = (lbl, val, delta, cls) => `<div class="chiffre"><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div>${delta}</div>`;
-  $('#ac-chiffres').innerHTML = chiffre('Revenus', fmtE(p.revenus), deltaHtml(p.revenus, pp && pp.revenus)) + chiffre('Dépenses', fmtE(p.depenses), deltaHtml(p.depenses, pp && pp.depenses, true)) + chiffre("Taux d'épargne", pct(p.taux), `<span class="delta">épargné ${fmtE(p.epargne)}</span>`);
+  const chiffre = (lbl, val, delta, cls, filtre) => `<div class="chiffre"${filtre || ''}><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div>${delta}</div>`;
+  $('#ac-chiffres').innerHTML = chiffre('Revenus', fmtE(p.revenus), deltaHtml(p.revenus, pp && pp.revenus), '', df('perso', 'REV', acMois)) + chiffre('Dépenses', fmtE(p.depenses), deltaHtml(p.depenses, pp && pp.depenses, true), '', df('perso', 'DEP', acMois)) + chiffre("Taux d'épargne", pct(p.taux), `<span class="delta">épargné ${fmtE(p.epargne)}</span>`, '', df('perso', 'EPG', acMois));
+  brancherFiltres($('#ac-chiffres'));
   // to-do : seulement ce qui demande une action
   const items = [];
   const nAv = etat.data.operations.filter(o => o.statut === 'a_valider').length;
@@ -2711,7 +2738,7 @@ function rendreAccueil() {
   $('#ac-todo').innerHTML = items.length ? items.map(t => `<li data-go="${t.go}"><span class="ico">${t.ico}</span><span class="txt">${esc(t.titre)}<small>${esc(t.sous)}</small></span><span class="chev">›</span></li>`).join('') : '<li><span class="ico">✅</span><span class="txt">Tout est à jour<small>rien à confirmer, rien à importer</small></span></li>';
   $('#ac-todo').querySelectorAll('li[data-go]').forEach(li => li.onclick = async () => { const g = li.dataset.go; if (g.startsWith('titulaire:')) { etat.rules.config.titulaire = g.slice(10); marquer('rules'); recategoriser(); toast('Titulaire enregistré : tes virements à toi-même sont classés', 'ok'); await sauver(); } else if (g === 'abos') filtrerOps('perso', 'ABO', ''); else montrerEcran(g); });
   // flux du mois
-  if (libOk()) rendreSankey('s-accueil', graphes.sankeyPerso(etat.data, [acMois]), (n) => { if (/^(Reste|Puisé)$/.test(n.name)) return; an.mode = 'mois'; an.valeur = acMois; an.detail = n.type === 'hub' ? { code: 'REV', libelle: 'Revenus' } : { code: n.name === 'Épargne' ? 'EPG' : n.name === 'REV.NC' ? 'NC' : n.name, libelle: n.libelle }; if (n.type === 'dep' && n.name !== 'NC') an.deplie.add(n.name); montrerEcran('analyse'); }, { cle: acMois });
+  if (libOk()) rendreSankey('s-accueil', graphes.sankeyPerso(etat.data, [acMois]), (n) => { if (/^(Reste|Puisé)$/.test(n.name)) return; filtrerOps('perso', n.type === 'hub' ? 'REV' : n.name === 'Épargne' ? 'EPG' : n.name === 'REV.NC' ? 'NC' : n.name, acMois); }, { cle: acMois });
   else $('#s-accueil').innerHTML = '<p class="muted small">graphiques indisponibles</p>';
 }
 $('#ac-prec').onclick = () => { const m = stats.mois(etat.data), i = m.indexOf(acMois); if (i > 0) { acMois = m[i - 1]; rendreAccueil(); } };
