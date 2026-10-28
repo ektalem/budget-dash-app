@@ -33,6 +33,8 @@ nav button .n{display:inline-block;min-width:18px;padding:0 5px;border-radius:9p
 .chiffre .delta{font-size:12px;color:var(--muted)}
 .chiffre[data-filtre]{cursor:pointer;transition:.12s}.chiffre[data-filtre]:hover{border-color:var(--acc);background:var(--accbg)}
 .fam-row[data-filtre]{cursor:pointer}.fam-row[data-filtre]:hover{background:#fafaf7}
+.chiffre[data-explique]{cursor:pointer}.chiffre[data-explique]:hover{border-color:var(--acc);background:var(--accbg)}
+.explique{background:#fafaf7;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}.explique table{width:auto}.explique td{padding:3px 10px 3px 0}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chips span{background:var(--accbg);color:var(--acc);border-radius:14px;padding:3px 10px;font-size:13px;display:inline-flex;align-items:center;gap:6px}.chips span b{cursor:pointer;font-weight:600}.delta.pos{color:var(--ok)}.delta.neg{color:var(--bad)}
 .todo{list-style:none;margin:0;padding:0}
 .todo li{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -124,8 +126,8 @@ input,select,textarea{max-width:100%}
 .chart.haut{height:360px}
 .sankey svg{width:100%;height:auto;display:block}
 .sankey .node rect{cursor:pointer;stroke:none}
-.sankey .node text{font-size:12px;fill:var(--ink);pointer-events:none}
-.sankey .link{fill:none;stroke:#9a9890;stroke-opacity:.28}
+.sankey .node text{font-size:12px;fill:var(--ink);cursor:pointer}
+.sankey .link{fill:none;stroke:#9a9890;stroke-opacity:.28;cursor:pointer}
 .sankey .link:hover{stroke-opacity:.55}
 .legende{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin-top:6px}
 .legende span i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
@@ -378,7 +380,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '0.10.2';
+const APP_VERSION = '0.10.3';
 const SCHEMA = 1;
 
 const util = {
@@ -2570,6 +2572,7 @@ function rendrePro() {
   if (!proMois) { z.innerHTML = '<div class="card"><p class="muted small">Importe le CSV du compte pro et les deux exports Doctolib (Opérations › Importer).</p></div>'; return; }
   const x = pro.mois(etat.data, etat.rules, proMois), c = pro.cumul(etat.data, etat.rules), agg = (etat.data.doctolib || {})[proMois];
   const chiffre = (lbl, val, sous, cls, filtre) => `<div class="chiffre"${filtre || ''}><div class="lbl">${lbl}</div><div class="big ${cls || ''}">${val}</div><span class="delta">${sous || ''}</span></div>`;
+  const dx = (k) => ` data-explique="${k}"`;
   const ecart = (prevu, paye) => prevu === null ? '' : paye ? `<span class="delta ${Math.abs(paye - prevu) < 1 ? 'pos' : 'neg'}">prélevé ${fmtE(paye)} (${paye - prevu >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((paye - prevu) * 100) / 100))})</span>` : '<span class="delta">pas encore prélevée</span>';
   const sansDocto = `<p class="small" style="color:var(--warn);margin:0 0 8px">Pas d'export Doctolib pour ${moisLisible(proMois)} : importe les deux fichiers (un par structure) pour le facturé, la rétro prévue et le versement autorisé.</p>`;
   const N = x.nice, E = x.ehpad, cfg = x.cfg;
@@ -2577,13 +2580,13 @@ function rendrePro() {
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">🏥 Roquebrune EHPAD <span class="muted small">agenda « Belkadi Maxime »</span></h2></div>
       ${x.doctolib ? '' : sansDocto}
-      <div class="chiffres" style="margin-top:8px">${chiffre('Tu peux te verser', E.autorise === null ? '—' : fmtE(E.autorise), E.autorise === null ? '' : `(facturé ${fmtE(E.facture)} − ${fmtE(cfg.ehpad_fixe)}) × ${cfg.ehpad_part} %`, 'pos')}${chiffre('Facturé ce mois', fmtE(E.facture), E.aFacturer ? `+ ${fmtE(E.aFacturer)} encore à facturer` : '')}${chiffre('Rétrocession', fmtE(cfg.ehpad_fixe), ecart(cfg.ehpad_fixe, E.retroPayee), '', df('pro', 'RETRO.EHPAD', proMois))}</div>
+      <div class="chiffres" style="margin-top:8px">${chiffre('Tu peux te verser', E.autorise === null ? '—' : fmtE(E.autorise), E.autorise === null ? '' : `(facturé ${fmtE(E.facture)} − ${fmtE(cfg.ehpad_fixe)}) × ${cfg.ehpad_part} %`, 'pos', dx('ehpad-autorise'))}${chiffre('Facturé ce mois', fmtE(E.facture), E.aFacturer ? `+ ${fmtE(E.aFacturer)} encore à facturer` : '', '', dx('ehpad-facture'))}${chiffre('Rétrocession', fmtE(cfg.ehpad_fixe), ecart(cfg.ehpad_fixe, E.retroPayee), '', df('pro', 'RETRO.EHPAD', proMois))}</div>
       ${c ? `<p class="small muted" style="margin:10px 0 0">Depuis ${moisLisible(c.depuis)} (${c.mois} mois) : autorisé ${fmtE(c.autorise)} · <a href="#"${df('pro', 'PREL', '')}>versé au perso ${fmtE(c.verse)}</a> (tous virements pro → perso) · <b style="color:${c.reste >= 0 ? 'var(--ok)' : 'var(--bad)'}">${c.reste >= 0 ? 'reste ' + fmtE(c.reste) : 'dépassé de ' + fmtE(-c.reste)}</b></p>` : ''}
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">🏢 Riquier Nice <span class="muted small">agenda « Maxime »</span></h2></div>
       ${x.doctolib ? '' : sansDocto}
-      <div class="chiffres" style="margin-top:8px">${chiffre('Facturé ce mois', fmtE(N.facture), N.facture === null ? '' : `cabinet ${fmtE(N.factureCabinet)} · domicile ${fmtE(N.factureDomicile)}${N.aFacturer ? ` · à facturer ${fmtE(N.aFacturer)}` : ''}`)}${chiffre('Rétro prévue', N.retroPrevue === null ? '—' : fmtE(N.retroPrevue), N.retroPrevue === null ? '' : `${cfg.nice_cabinet} % cabinet + ${cfg.nice_domicile} % domicile, sur le facturé`)}${chiffre('Rétro prélevée', N.retroPayee ? fmtE(N.retroPayee) : '—', N.retroPrevue !== null && N.retroPayee ? `écart ${N.retroPayee - N.retroPrevue >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((N.retroPayee - N.retroPrevue) * 100) / 100))}` : N.retroPrevueCA !== null ? `sur tout le CA du mois ce serait ${fmtE(N.retroPrevueCA)}` : '', '', df('pro', 'RETRO.RIQUIER', proMois))}</div>
+      <div class="chiffres" style="margin-top:8px">${chiffre('Facturé ce mois', fmtE(N.facture), N.facture === null ? '' : `cabinet ${fmtE(N.factureCabinet)} · domicile ${fmtE(N.factureDomicile)}${N.aFacturer ? ` · à facturer ${fmtE(N.aFacturer)}` : ''}`, '', dx('nice-facture'))}${chiffre('Rétro prévue', N.retroPrevue === null ? '—' : fmtE(N.retroPrevue), N.retroPrevue === null ? '' : `${cfg.nice_cabinet} % cabinet + ${cfg.nice_domicile} % domicile, sur le facturé`, '', dx('nice-retro'))}${chiffre('Rétro prélevée', N.retroPayee ? fmtE(N.retroPayee) : '—', N.retroPrevue !== null && N.retroPayee ? `écart ${N.retroPayee - N.retroPrevue >= 0 ? '+' : '−'}${fmtE(Math.abs(Math.round((N.retroPayee - N.retroPrevue) * 100) / 100))}` : N.retroPrevueCA !== null ? `sur tout le CA du mois ce serait ${fmtE(N.retroPrevueCA)}` : '', '', df('pro', 'RETRO.RIQUIER', proMois))}</div>
     </div>
     <div class="card">
       <h2>🏦 Compte pro — ${moisLisible(proMois)}</h2>
@@ -2602,6 +2605,18 @@ function rendrePro() {
         <button class="b primary small" id="pc-ok">Enregistrer</button>
       </div></details>`;
   brancherFiltres(z);
+  // justification des chiffres Doctolib : un panneau sous la carte avec le calcul
+  z.querySelectorAll('[data-explique]').forEach(el => el.onclick = () => {
+    const k = el.dataset.explique; const carte = el.closest('.card'); let ex = carte.querySelector('.explique'); if (ex && ex.dataset.k === k) { ex.remove(); return; } if (ex) ex.remove();
+    const NE = agg ? agg.entites.NICE : null, EE = agg ? agg.entites.EHPAD : null; const T = (rows) => `<table><tbody>${rows.map(r => `<tr><td class="muted small">${r[0]}</td><td class="num"><b>${r[1]}</b></td></tr>`).join('')}</tbody></table>`;
+    let html = '';
+    if (!agg) html = '<p class="small muted" style="margin:0">Importe les deux exports Doctolib du mois (Opérations › Importer).</p>';
+    else if (k === 'ehpad-facture') html = `<p class="small" style="margin:0 0 6px"><b>Roquebrune EHPAD</b>, export Doctolib du ${agg.importe_le}, agenda « Belkadi Maxime »</p>` + T([['séances du mois', EE.seances], ['dont facturées (FSE transmises)', `${fmtE(EE.facture)}`], ['dont encore à facturer', `${fmtE(EE.aFacturer)}`], ['dont à associer', EE.aAssocier], ['CA total réel', `${fmtE(EE.ca)}`]]);
+    else if (k === 'ehpad-autorise') html = `<p class="small" style="margin:0 0 6px">Ce que tu peux te verser pour l'EHPAD, sur le <b>facturé</b> (pas sur l'effectué, pour ne pas creuser la trésorerie)</p>` + T([['facturé ce mois', fmtE(EE.facture)], [`− rétrocession fixe`, fmtE(cfg.ehpad_fixe)], ['= base', fmtE(Math.max(0, EE.facture - cfg.ehpad_fixe))], [`× part à se verser ${cfg.ehpad_part} %`, fmtE(E.autorise)]]) + (c ? `<p class="small muted" style="margin:6px 0 0">Cumul depuis ${moisLisible(c.depuis)} : autorisé ${fmtE(c.autorise)} − versé ${fmtE(c.verse)} = ${fmtE(c.reste)}.</p>` : '');
+    else if (k === 'nice-facture') html = `<p class="small" style="margin:0 0 6px"><b>Riquier Nice</b>, export Doctolib du ${agg.importe_le}, agenda « Maxime »</p>` + T([['séances du mois', NE.seances], ['facturées au cabinet', fmtE(NE.factureCabinet)], ['facturées à domicile', fmtE(NE.factureDomicile)], ['total facturé', fmtE(NE.facture)], ['encore à facturer', fmtE(NE.aFacturer)], ['CA total réel', fmtE(NE.ca)], ['indemnités kilométriques', fmtE(NE.ik)]]);
+    else if (k === 'nice-retro') html = `<p class="small" style="margin:0 0 6px">Rétrocession prévue au cabinet, calculée sur le <b>facturé</b> (la secrétaire calcule peut-être sur une autre base : à comparer avec le prélèvement réel)</p>` + T([[`cabinet ${fmtE(NE.factureCabinet)} × ${cfg.nice_cabinet} %`, fmtE(NE.factureCabinet * cfg.nice_cabinet / 100)], [`domicile ${fmtE(NE.factureDomicile)} × ${cfg.nice_domicile} %`, fmtE(NE.factureDomicile * cfg.nice_domicile / 100)], ['= rétro prévue', fmtE(N.retroPrevue)], ['sur tout le CA du mois (facturé + à facturer)', fmtE(N.retroPrevueCA)], ['prélevée sur le compte pro', N.retroPayee ? fmtE(N.retroPayee) : 'pas encore']]);
+    carte.insertAdjacentHTML('beforeend', `<div class="explique" data-k="${k}">${html}</div>`);
+  });
   $('#pc-ok').onclick = async () => { etat.rules.config.pro = { nice_cabinet: Number($('#pc-nc').value), nice_domicile: Number($('#pc-nd').value), ehpad_fixe: Number($('#pc-ef').value), ehpad_part: Number($('#pc-ep').value) }; marquer('rules'); toast('Paramètres enregistrés', 'ok'); await sauver(); };
   if (agg && typeof Chart === 'function') chart('c-docto-jours', { type: 'bar', data: { labels: agg.jours.map(j => j.date.slice(8)), datasets: [{ label: 'Nice', data: agg.jours.map(j => j.NICE), backgroundColor: '#2b5db3' }, { label: 'EHPAD', data: agg.jours.map(j => j.EHPAD), backgroundColor: '#1d7a4d' }] }, options: optBarres(true, false) });
 }
@@ -2828,6 +2843,7 @@ function rendreSankey(id, s, onNode, opts) {
   liens.exit().transition().duration(T).attr('stroke-opacity', 0).remove();
   const liensN = liens.enter().append('path').attr('class', 'link').attr('d', d3.sankeyLinkHorizontal()).attr('stroke-width', d => Math.max(1, d.width)).attr('stroke-opacity', 0);
   liensN.append('title');
+  liensN.merge(liens).on('click', (e, d) => onNode && onNode(d.target.type === 'hub' ? d.source : d.target));
   liensN.merge(liens).select('title').text(d => `${d.source.libelle} → ${d.target.libelle} : ${fmtE(d.value)}`);
   liensN.merge(liens).transition().duration(T).attr('d', d3.sankeyLinkHorizontal()).attr('stroke-width', d => Math.max(1, d.width)).attr('stroke-opacity', .28);
   const noeuds = svg.select('g.nodes').selectAll('g.node').data(g.nodes, d => d.name);
@@ -2838,7 +2854,7 @@ function rendreSankey(id, s, onNode, opts) {
   tous.transition().duration(T).style('opacity', 1);
   tous.select('rect').attr('fill', d => couleur(d.name)).attr('stroke', d => opts && opts.deplie && opts.deplie.has(d.name) ? '#1f1f1d' : 'none').attr('stroke-width', 2).style('cursor', d => /^(Reste|Puisé)$/.test(d.name) ? 'default' : 'pointer').on('click', (e, d) => onNode && onNode(d)).transition().duration(T).attr('x', d => d.x0).attr('y', d => d.y0).attr('height', d => Math.max(1, d.y1 - d.y0)).attr('width', d => d.x1 - d.x0);
   tous.select('rect title').text(d => `${d.libelle} : ${fmtE(d.value)}${d.type === 'dep' ? ' — clique pour déplier' : d.type === 'sous' || d.type === 'rev' || d.type === 'epg' ? ' — clique pour les lignes' : ''}`);
-  tous.select('text').attr('dy', '0.35em').text(d => `${etroit && d.libelle.length > 18 ? d.libelle.slice(0, 17) + '…' : d.libelle} ${fmtE(d.value)}`).transition().duration(T).attr('x', d => d.x0 < W / 2 ? d.x1 + 6 : d.x0 - 6).attr('y', d => (d.y1 + d.y0) / 2).attr('text-anchor', d => d.x0 < W / 2 ? 'start' : 'end');
+  tous.select('text').attr('dy', '0.35em').on('click', (e, d) => onNode && onNode(d)).text(d => `${etroit && d.libelle.length > 18 ? d.libelle.slice(0, 17) + '…' : d.libelle} ${fmtE(d.value)}`).transition().duration(T).attr('x', d => d.x0 < W / 2 ? d.x1 + 6 : d.x0 - 6).attr('y', d => (d.y1 + d.y0) / 2).attr('text-anchor', d => d.x0 < W / 2 ? 'start' : 'end');
   sankeys[id] = opts && opts.cle;
 }
 
