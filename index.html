@@ -347,7 +347,7 @@ input,select,textarea{max-width:100%}
 <script>
 'use strict';
 // ============================================================ CORE (sans DOM)
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const SCHEMA = 1;
 
 const util = {
@@ -2708,9 +2708,12 @@ const sankeys = {};
 function rendreSankey(id, s, onNode, opts) {
   const el = $('#' + id); if (!el) return;
   if (!s || !s.links.length) { el.innerHTML = '<p class="muted small" style="margin:0">aucun flux sur la période</p>'; delete sankeys[id]; return; }
-  const W = Math.max(360, el.clientWidth || 800), etroit = W < 560, H = Math.max(220, Math.min(640, 90 + s.nodes.length * (etroit ? 22 : 26)));
-  const sk = d3.sankey().nodeWidth(14).nodePadding(etroit ? 8 : 12).nodeSort(null).extent([[1, 6], [W - 1, H - 6]]);
+  const W = Math.max(360, el.clientWidth || 800), etroit = W < 560, H = Math.max(240, Math.min(720, 110 + s.nodes.length * (etroit ? 24 : 30)));
+  // colonnes fixes : sources → Revenus → familles → sous-catégories (une famille non dépliée reste dans sa colonne, alignée à gauche)
+  const sk = d3.sankey().nodeWidth(14).nodePadding(etroit ? 8 : 12).nodeSort(null).nodeAlign(d3.sankeyLeft).extent([[1, 6], [W - 1, H - 6]]);
   const g = sk({ nodes: s.nodes.map(n => Object.assign({}, n)), links: s.links.map(l => Object.assign({}, l)) });
+  const maxDepth = Math.max(...g.nodes.map(n => n.depth));
+  const aGauche = (d) => d.depth === maxDepth || (d.depth > 0 && d.x0 > W * 0.72);
   let svg = el.querySelector('svg') ? d3.select(el).select('svg') : null;
   const neuf = !svg || sankeys[id] !== (opts && opts.cle);
   if (!svg) { el.innerHTML = ''; svg = d3.select(el).append('svg'); svg.append('g').attr('class', 'links'); svg.append('g').attr('class', 'nodes'); }
@@ -2731,7 +2734,7 @@ function rendreSankey(id, s, onNode, opts) {
   tous.transition().duration(T).style('opacity', 1);
   tous.select('rect').attr('fill', d => couleur(d.name)).attr('stroke', d => opts && opts.deplie && opts.deplie.has(d.name) ? '#1f1f1d' : 'none').attr('stroke-width', 2).style('cursor', d => /^(Reste|Puisé)$/.test(d.name) ? 'default' : 'pointer').on('click', (e, d) => onNode && onNode(d)).transition().duration(T).attr('x', d => d.x0).attr('y', d => d.y0).attr('height', d => Math.max(1, d.y1 - d.y0)).attr('width', d => d.x1 - d.x0);
   tous.select('rect title').text(d => `${d.libelle} : ${fmtE(d.value)}${d.type === 'dep' ? ' — clique pour déplier' : d.type === 'sous' || d.type === 'rev' || d.type === 'epg' ? ' — clique pour les lignes' : ''}`);
-  tous.select('text').attr('dy', '0.35em').on('click', (e, d) => onNode && onNode(d)).text(d => `${etroit && d.libelle.length > 18 ? d.libelle.slice(0, 17) + '…' : d.libelle} ${fmtE(d.value)}`).transition().duration(T).attr('x', d => d.x0 < W / 2 ? d.x1 + 6 : d.x0 - 6).attr('y', d => (d.y1 + d.y0) / 2).attr('text-anchor', d => d.x0 < W / 2 ? 'start' : 'end');
+  tous.select('text').attr('dy', '0.35em').on('click', (e, d) => onNode && onNode(d)).text(d => `${etroit && d.libelle.length > 18 ? d.libelle.slice(0, 17) + '…' : d.libelle} ${fmtE(d.value)}`).transition().duration(T).attr('x', d => aGauche(d) ? d.x0 - 6 : d.x1 + 6).attr('y', d => (d.y1 + d.y0) / 2).attr('text-anchor', d => aGauche(d) ? 'end' : 'start');
   sankeys[id] = opts && opts.cle;
 }
 
